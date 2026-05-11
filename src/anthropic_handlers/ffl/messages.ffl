@@ -1,18 +1,72 @@
 /**
  * Messages integration namespace.
  *
- * Wraps the Messages API (prompt caching, vision, streaming, tool use).
- * Reference: https://github.com/anthropics/anthropic-sdk-python
+ * Wraps the Anthropic Messages API. The current cut covers the two
+ * foundational calls; tool use, vision, prompt caching, and streaming
+ * each warrant their own facet and will be added incrementally.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * Reference: https://github.com/anthropics/anthropic-sdk-python
  */
 namespace anthropic.messages {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema MessagesPlaceholder {
-        status: String
+    /** Result of a single Messages API call. */
+    schema MessageResult {
+        text: String,
+        model: String,
+        stop_reason: String,
+        input_tokens: Long,
+        output_tokens: Long
     }
 
+    /** Token-count result for a prepared request. */
+    schema TokenCount {
+        input_tokens: Long,
+        model: String
+    }
+
+    /**
+     * Single-turn Messages call. Sends `prompt` as one user turn,
+     * optionally with a `system` prompt, and returns the assistant's
+     * text plus usage + stop reason.
+     */
+    event facet CreateMessage(
+        prompt: String,
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024) => (result: MessageResult)
+
+    /**
+     * Count input tokens for a prepared request before sending it.
+     * Costs one accounting round-trip but no inference.
+     */
+    event facet CountTokens(
+        prompt: String,
+        system: String = "",
+        model: String = "") => (count: TokenCount)
+
+    /**
+     * Convenience workflow: count tokens then generate text in one go.
+     * Demonstrates composing the two facets and shows the input-budget
+     * pattern the docs recommend before any large prompt.
+     */
+    workflow ChatOnce(prompt: String, system: String = "",
+        model: String = "", max_tokens: Long = 1024) => (
+            text: String,
+            input_tokens: Long,
+            output_tokens: Long) andThen {
+
+        tokens = CountTokens(prompt = $.prompt,
+            system = $.system,
+            model = $.model)
+
+        reply = CreateMessage(prompt = $.prompt,
+            system = $.system,
+            model = $.model,
+            max_tokens = $.max_tokens)
+
+        yield ChatOnce(
+            text = reply.result.text,
+            input_tokens = tokens.count.input_tokens,
+            output_tokens = reply.result.output_tokens)
+    }
 }

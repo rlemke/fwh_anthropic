@@ -26,19 +26,30 @@ from anthropic_handlers.tools._lib.client import (  # noqa: F401
     redact_prompt,
 )
 
-# Per-area modules — present but TODO: each module's public API will
-# be re-exported here as the area is wired up.
+# Per-area modules — present but most are TODO. The messages area is
+# wired up; the others re-export their public API as they get filled in.
 from anthropic_handlers.tools._lib import agent_sdk, batch, claude_code, computer_use, files, messages  # noqa: F401
 
+# --- messages area -----------------------------------------------------------
+from anthropic_handlers.tools._lib.messages import (  # noqa: F401
+    count_tokens,
+    create_message,
+)
+
 __all__ = [
+    # Shared SDK client + helpers
     "client",
     "DEFAULT_MODEL",
     "get_client",
     "redact_prompt",
+    # Per-area module re-exports
     "agent_sdk",
     "batch",
     "claude_code",
     "computer_use",
     "files",
     "messages",
+    # Messages API public surface
+    "count_tokens",
+    "create_message",
 ]
