@@ -1,18 +1,44 @@
 /**
- * ClaudeCode integration namespace.
+ * Claude Code CLI orchestration namespace.
  *
- * Wraps the Claude Code CLI orchestration.
- * Reference: https://github.com/anthropics/claude-code
+ * Wraps the `claude` CLI from https://github.com/anthropics/claude-code
+ * as a subprocess so FFL workflows can fan it out across distributed
+ * runners. Best for batch refactors / audits where you want to drive
+ * the same prompt against many directories.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * Requires the `claude` binary on PATH. Install via
+ *     npm install -g @anthropic-ai/claude-code
+ * (or the equivalent on your platform).
  */
 namespace anthropic.code {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema ClaudeCodePlaceholder {
-        status: String
+    /** Result of a single Claude Code CLI invocation. */
+    schema ClaudeCodeResult {
+        stdout: String,
+        stderr: String,
+        exit_code: Long,
+        success: Boolean
     }
 
+    /**
+     * Run `claude -p <prompt>` non-interactively and capture
+     * stdout / stderr / exit code.
+     *
+     * `working_dir` becomes the subprocess `cwd` — Claude Code's
+     * file-tool sandbox is rooted there.
+     *
+     * `allowed_tools` is a comma-separated list passed via
+     * `--allowed-tools` (e.g. `Read,Edit,Bash`).
+     *
+     * `permission_mode` mirrors the CLI flag (`default`,
+     * `acceptEdits`, `bypassPermissions`, `plan`, …). Pass the
+     * empty string to use the CLI's default.
+     */
+    event facet RunClaudeCode(
+        prompt: String,
+        working_dir: String = "",
+        allowed_tools: String = "",
+        model: String = "",
+        permission_mode: String = "",
+        timeout_seconds: Long = 600) => (result: ClaudeCodeResult)
 }

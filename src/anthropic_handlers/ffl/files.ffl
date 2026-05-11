@@ -1,18 +1,53 @@
 /**
- * Files integration namespace.
+ * Files API namespace.
  *
- * Wraps the Files API + citations.
- * Reference: https://github.com/anthropics/anthropic-sdk-python
+ * Stores documents on Anthropic's side so subsequent Messages calls
+ * can reference them by `file_id` instead of re-uploading inline
+ * content. Best for RAG-style flows where the same document is
+ * queried repeatedly.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * Reference: https://docs.anthropic.com/en/docs/build-with-claude/files-api
  */
 namespace anthropic.files {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema FilesPlaceholder {
-        status: String
+    /** Metadata for one stored file. */
+    schema FileMetadata {
+        id: String,
+        type: String,
+        filename: String,
+        mime_type: String,
+        size_bytes: Long,
+        created_at: String,
+        downloadable: Boolean
     }
 
+    /** Listing wrapper — `files_json` carries the FileMetadata list. */
+    schema FileListing {
+        count: Long,
+        files_json: String
+    }
+
+    /** Confirmation returned when a file is deleted. */
+    schema FileDeletion {
+        id: String,
+        type: String,
+        deleted: Boolean
+    }
+
+    /**
+     * Upload a local file. `mime_type` is autodetected from the
+     * filename when empty; pass it explicitly to force a specific
+     * type (e.g. `application/pdf`).
+     */
+    event facet UploadFile(
+        path: String,
+        mime_type: String = "") => (result: FileMetadata)
+
+    /** List uploaded files (most-recent-first). */
+    event facet ListFiles(
+        limit: Long = 50) => (result: FileListing)
+
+    /** Delete a previously-uploaded file by ID. */
+    event facet DeleteFile(
+        file_id: String) => (result: FileDeletion)
 }

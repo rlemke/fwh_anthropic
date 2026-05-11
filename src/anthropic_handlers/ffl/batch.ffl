@@ -1,18 +1,55 @@
 /**
- * Batch integration namespace.
+ * Message Batches API namespace.
  *
- * Wraps the Message Batches API.
- * Reference: https://github.com/anthropics/anthropic-sdk-python
+ * Submits many Messages requests as one batch (≈50% cheaper than
+ * synchronous calls, 24-hour SLA). Three primitives are exposed —
+ * compose your own polling cadence in the surrounding workflow.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * Reference: https://docs.anthropic.com/en/docs/build-with-claude/message-batches
  */
 namespace anthropic.batch {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema BatchPlaceholder {
-        status: String
+    /** Batch metadata returned by Submit + GetBatchStatus. */
+    schema BatchMetadata {
+        id: String,
+        type: String,
+        processing_status: String,
+        created_at: String,
+        expires_at: String,
+        ended_at: String,
+        results_url: String,
+        processing: Long,
+        succeeded: Long,
+        errored: Long,
+        canceled: Long,
+        expired: Long
     }
 
+    /** Aggregated batch results (results_json carries the per-request list). */
+    schema BatchResults {
+        batch_id: String,
+        result_count: Long,
+        results_json: String
+    }
+
+    /**
+     * Submit a batch of Messages requests. `requests_json` is a
+     * JSON-serialised list of objects shaped per the SDK's
+     * MessageBatchRequest type (each has `custom_id` + `params`).
+     */
+    event facet SubmitBatch(
+        requests_json: String) => (result: BatchMetadata)
+
+    /** Check current status of a batch. Does NOT block on completion. */
+    event facet GetBatchStatus(
+        batch_id: String) => (result: BatchMetadata)
+
+    /**
+     * Pull results for an ended batch. `results_json` decodes to a
+     * list of per-request dicts (with `custom_id`, `type`, and either
+     * `text` + usage on success or `error_type` + `error_message` on
+     * failure).
+     */
+    event facet GetBatchResults(
+        batch_id: String) => (result: BatchResults)
 }

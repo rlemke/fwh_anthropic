@@ -43,6 +43,23 @@ from anthropic_handlers.tools._lib.messages import (  # noqa: F401
 # --- agent_sdk area ----------------------------------------------------------
 from anthropic_handlers.tools._lib.agent_sdk import run_agent  # noqa: F401
 
+# --- claude_code area --------------------------------------------------------
+from anthropic_handlers.tools._lib.claude_code import run_claude_code  # noqa: F401
+
+# --- batch area --------------------------------------------------------------
+from anthropic_handlers.tools._lib.batch import (  # noqa: F401
+    get_batch_results,
+    get_batch_status,
+    submit_batch,
+)
+
+# --- files area --------------------------------------------------------------
+from anthropic_handlers.tools._lib.files import (  # noqa: F401
+    delete_file,
+    list_files,
+    upload_file,
+)
+
 __all__ = [
     # Shared SDK client + helpers
     "client",
@@ -65,4 +82,14 @@ __all__ = [
     "stream_message",
     # Agent SDK public surface
     "run_agent",
+    # Claude Code public surface
+    "run_claude_code",
+    # Batch public surface
+    "get_batch_results",
+    "get_batch_status",
+    "submit_batch",
+    # Files public surface
+    "delete_file",
+    "list_files",
+    "upload_file",
 ]

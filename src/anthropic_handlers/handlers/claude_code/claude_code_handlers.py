@@ -1,13 +1,7 @@
-"""ClaudeCode event-facet handlers.
+"""Claude Code CLI event-facet handlers.
 
-Status: scaffolded. _DISPATCH is empty; register_handlers is
-a no-op. Wire facets in by:
-
-1. Adding pure-function wrappers to anthropic_handlers.tools._lib.claude_code
-2. Importing them here via the shim
-3. Adding entries to _DISPATCH mapping facet names to handlers
-4. The standard `handle` / `register_handlers` / `register_claude_code_handlers`
-   functions below will then dispatch them automatically.
+Wires :func:`anthropic_handlers.tools._lib.claude_code.run_claude_code`
+into the ``anthropic.code.*`` FFL namespace.
 
 Reference: https://github.com/anthropics/claude-code
 """
@@ -18,15 +12,48 @@ import logging
 import os
 from typing import Any
 
-# from ..shared.anthropic_utils import …  # uncomment when wiring facets
+from ..shared.anthropic_utils import DEFAULT_MODEL, redact_prompt, run_claude_code
 
 log = logging.getLogger(__name__)
 
 NAMESPACE = "anthropic.code"
 
 
-# RegistryRunner dispatch adapter — populate as facets are added.
-_DISPATCH: dict[str, Any] = {}
+def _run_claude_code_handler(payload: dict) -> dict[str, Any]:
+    prompt = payload["prompt"]
+    working_dir = payload.get("working_dir") or None
+    model = payload.get("model") or None
+    permission_mode = payload.get("permission_mode") or None
+
+    allowed_tools_raw = payload.get("allowed_tools", "") or ""
+    allowed_tools = [t.strip() for t in allowed_tools_raw.split(",") if t.strip()]
+
+    timeout = payload.get("timeout_seconds")
+    timeout_seconds = float(timeout) if timeout not in (None, "") else 600.0
+
+    step_log = payload.get("_step_log")
+    if step_log:
+        cwd_marker = f" cwd={working_dir}" if working_dir else ""
+        step_log(
+            f"RunClaudeCode: model={model or DEFAULT_MODEL}{cwd_marker} "
+            f"prompt={redact_prompt(prompt)}"
+        )
+
+    return {
+        "result": run_claude_code(
+            prompt=prompt,
+            working_dir=working_dir,
+            allowed_tools=allowed_tools or None,
+            model=model,
+            permission_mode=permission_mode,
+            timeout_seconds=timeout_seconds,
+        )
+    }
+
+
+_DISPATCH: dict[str, Any] = {
+    f"{NAMESPACE}.RunClaudeCode": _run_claude_code_handler,
+}
 
 
 def handle(payload: dict) -> dict:
@@ -38,7 +65,6 @@ def handle(payload: dict) -> dict:
 
 
 def register_handlers(runner) -> None:
-    """Register all facets with a RegistryRunner. Empty during scaffolding."""
     for facet_name in _DISPATCH:
         runner.register_handler(
             facet_name=facet_name,
@@ -48,7 +74,6 @@ def register_handlers(runner) -> None:
 
 
 def register_claude_code_handlers(poller) -> None:
-    """Register all facets with an AgentPoller (legacy). Empty during scaffolding."""
     for fqn, func in _DISPATCH.items():
         poller.register(fqn, func)
         log.debug("Registered claude_code handler: %s", fqn)
