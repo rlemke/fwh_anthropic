@@ -51,6 +51,12 @@ def main() -> int:
     )
     p.add_argument("--max-tokens", type=int, default=1024, dest="max_tokens")
     p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument(
+        "--cache-system",
+        action="store_true",
+        dest="cache_system",
+        help="Mark the system prompt with cache_control=ephemeral",
+    )
     args = p.parse_args()
 
     tools = _load_json_arg(inline=args.tools_json, path=args.tools_file, name="tools")
@@ -67,8 +73,9 @@ def main() -> int:
     else:
         raise SystemExit("provide either --prompt or a --messages-json/--messages-file")
 
+    cache_marker = " [cached]" if args.cache_system else ""
     print(
-        f"CreateMessageWithTools: model={args.model or DEFAULT_MODEL} "
+        f"CreateMessageWithTools: model={args.model or DEFAULT_MODEL}{cache_marker} "
         f"tools={len(tools)} prompt={redact_prompt(preview)}",
         file=sys.stderr,
     )
@@ -79,6 +86,7 @@ def main() -> int:
         model=args.model,
         max_tokens=args.max_tokens,
         temperature=args.temperature,
+        cache_system=args.cache_system,
     )
     json.dump(result, sys.stdout, indent=2, default=str)
     sys.stdout.write("\n")

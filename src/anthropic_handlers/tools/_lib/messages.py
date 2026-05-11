@@ -4,14 +4,18 @@ Reference: https://github.com/anthropics/anthropic-sdk-python
 
 Public surface:
 
-- :func:`create_message`            — single-turn ``messages.create`` (text only)
-- :func:`count_tokens`              — ``messages.count_tokens`` for a prepared request
-- :func:`create_message_with_tools` — single round with tool definitions; returns text + tool_use blocks + full message history so callers can drive multi-turn loops themselves
-- :func:`run_tool_use_loop`         — Python-side convenience: full multi-turn tool loop with caller-supplied tool implementations (dict of name → callable)
+- :func:`create_message`             — single-turn ``messages.create`` (text only)
+- :func:`count_tokens`               — ``messages.count_tokens`` for a prepared request
+- :func:`create_message_with_tools`  — single round with tool definitions; returns text + tool_use blocks + full message history so callers can drive multi-turn loops themselves
+- :func:`create_message_with_images` — vision: send one or more images (URLs or local files) alongside the prompt
+- :func:`run_tool_use_loop`          — Python-side convenience: full multi-turn tool loop with caller-supplied tool implementations (dict of name → callable)
 
-Vision inputs, prompt caching breakpoints, and streaming are
-deliberately *not* in this cut — each warrants its own facet to keep
-the call surface narrow.
+Prompt caching is supported on ``create_message`` and
+``create_message_with_tools`` via the ``cache_system`` kwarg — set to
+``True`` to mark the system prompt with ``cache_control = ephemeral``
+so Anthropic reuses the encoded prefix on subsequent calls.
+
+Streaming is deliberately *not* in this cut.
 
 Each function:
 
@@ -23,9 +27,57 @@ Each function:
 
 from __future__ import annotations
 
+import base64
+import mimetypes
+from pathlib import Path
 from typing import Any, Callable
 
 from .client import DEFAULT_MODEL, get_client
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _system_param(system: str, *, cache: bool) -> Any:
+    """Return the SDK-shaped ``system`` parameter.
+
+    When ``cache`` is False (the default), the SDK accepts a plain
+    string. When True, we have to use the block form so we can attach
+    ``cache_control``.
+    """
+    if not cache:
+        return system
+    return [
+        {
+            "type": "text",
+            "text": system,
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
+
+
+def _usage_fields(response: Any) -> dict[str, int]:
+    """Pull token-usage fields off a Messages response, including cache stats."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+        }
+    return {
+        "input_tokens": getattr(usage, "input_tokens", 0) or 0,
+        "output_tokens": getattr(usage, "output_tokens", 0) or 0,
+        "cache_creation_input_tokens": getattr(
+            usage, "cache_creation_input_tokens", 0
+        ) or 0,
+        "cache_read_input_tokens": getattr(
+            usage, "cache_read_input_tokens", 0
+        ) or 0,
+    }
 
 
 def create_message(
@@ -35,14 +87,24 @@ def create_message(
     model: str | None = None,
     max_tokens: int = 1024,
     temperature: float = 1.0,
+    cache_system: bool = False,
 ) -> dict[str, Any]:
     """Single-turn Messages call.
 
     Sends ``prompt`` as a single user turn, optionally with a ``system``
     prompt, and returns the assistant's text plus usage + stop reason.
+
+    When ``cache_system`` is True (and ``system`` is non-empty), the
+    system prompt is sent as a content block with
+    ``cache_control={"type": "ephemeral"}`` so Anthropic reuses the
+    encoded prefix on subsequent calls. The returned dict surfaces
+    ``cache_creation_input_tokens`` + ``cache_read_input_tokens`` so
+    callers can verify caching is actually kicking in.
     """
     if not prompt:
         raise ValueError("prompt must not be empty")
+    if cache_system and not system:
+        raise ValueError("cache_system=True requires a non-empty system prompt")
 
     client = get_client()
     model_id = model or DEFAULT_MODEL
@@ -53,7 +115,7 @@ def create_message(
         "temperature": float(temperature),
     }
     if system:
-        kwargs["system"] = system
+        kwargs["system"] = _system_param(system, cache=cache_system)
 
     response = client.messages.create(**kwargs)
 
@@ -63,13 +125,11 @@ def create_message(
     text = "".join(
         getattr(block, "text", "") for block in response.content if getattr(block, "type", "") == "text"
     )
-    usage = getattr(response, "usage", None)
     return {
         "text": text,
         "model": getattr(response, "model", model_id),
         "stop_reason": getattr(response, "stop_reason", ""),
-        "input_tokens": getattr(usage, "input_tokens", 0) if usage else 0,
-        "output_tokens": getattr(usage, "output_tokens", 0) if usage else 0,
+        **_usage_fields(response),
     }
 
 
@@ -143,6 +203,7 @@ def create_message_with_tools(
     model: str | None = None,
     max_tokens: int = 1024,
     temperature: float = 1.0,
+    cache_system: bool = False,
 ) -> dict[str, Any]:
     """Single round of a tool-use conversation.
 
@@ -151,12 +212,18 @@ def create_message_with_tools(
     model emitted, the **full** updated message history (with the
     model's reply appended as the latest assistant turn), and usage.
 
+    Set ``cache_system=True`` to mark the system prompt for prompt
+    caching — useful when the tool-use loop hammers the same tools +
+    instructions across many rounds.
+
     The caller is responsible for executing any returned tools and
     feeding ``tool_result`` blocks back via the messages history. For
     a turnkey loop, use :func:`run_tool_use_loop`.
     """
     if not tools:
         raise ValueError("tools must not be empty — use create_message() for text-only calls")
+    if cache_system and not system:
+        raise ValueError("cache_system=True requires a non-empty system prompt")
 
     messages = _normalise_messages(prompt)
     client = get_client()
@@ -170,21 +237,19 @@ def create_message_with_tools(
         "temperature": float(temperature),
     }
     if system:
-        kwargs["system"] = system
+        kwargs["system"] = _system_param(system, cache=cache_system)
 
     response = client.messages.create(**kwargs)
     blocks = [_content_block_to_dict(b) for b in (response.content or [])]
     text = "".join(b.get("text", "") for b in blocks if b["type"] == "text")
     tool_uses = [b for b in blocks if b["type"] == "tool_use"]
-    usage = getattr(response, "usage", None)
 
     return {
         "text": text,
         "tool_uses": tool_uses,
         "stop_reason": getattr(response, "stop_reason", ""),
         "model": getattr(response, "model", model_id),
-        "input_tokens": getattr(usage, "input_tokens", 0) if usage else 0,
-        "output_tokens": getattr(usage, "output_tokens", 0) if usage else 0,
+        **_usage_fields(response),
         # Updated history: caller appends tool_results and calls again.
         "messages": messages + [{"role": "assistant", "content": blocks}],
     }
@@ -285,3 +350,99 @@ def run_tool_use_loop(
         f"(last stop_reason={last_stop_reason!r}). Increase max_iterations or "
         f"check that tool implementations actually terminate the loop."
     )
+
+
+# ---------------------------------------------------------------------------
+# Vision
+# ---------------------------------------------------------------------------
+
+
+def _image_block_from_url(url: str) -> dict[str, Any]:
+    """Build a Messages image block from a URL."""
+    if not url:
+        raise ValueError("image URL must not be empty")
+    return {"type": "image", "source": {"type": "url", "url": url}}
+
+
+def _image_block_from_path(path: str) -> dict[str, Any]:
+    """Build a Messages image block from a local file.
+
+    Reads the file, base64-encodes it, and detects the media type via
+    :mod:`mimetypes`. Common image formats (PNG, JPEG, GIF, WebP) are
+    detected; for anything else the caller should pass a URL instead.
+    """
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"image file not found: {path}")
+    media_type, _ = mimetypes.guess_type(p.name)
+    if not media_type or not media_type.startswith("image/"):
+        raise ValueError(
+            f"could not detect image media type for {path!r}; "
+            "rename the file with a standard extension or pass a URL instead"
+        )
+    data = base64.b64encode(p.read_bytes()).decode("ascii")
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": data},
+    }
+
+
+def create_message_with_images(
+    *,
+    prompt: str,
+    image_urls: list[str] | None = None,
+    image_paths: list[str] | None = None,
+    system: str = "",
+    model: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float = 1.0,
+    cache_system: bool = False,
+) -> dict[str, Any]:
+    """Single-turn vision call: text prompt + one or more images.
+
+    ``image_urls`` are sent as URL blocks; ``image_paths`` are read
+    from disk and sent as base64 blocks. Pass either or both — order
+    is URLs first, then paths. At least one image must be provided.
+
+    Returns the same shape as :func:`create_message`.
+    """
+    if not prompt:
+        raise ValueError("prompt must not be empty")
+    if not image_urls and not image_paths:
+        raise ValueError(
+            "at least one of image_urls or image_paths must be provided — "
+            "use create_message() for text-only calls"
+        )
+    if cache_system and not system:
+        raise ValueError("cache_system=True requires a non-empty system prompt")
+
+    content: list[dict[str, Any]] = []
+    for url in image_urls or []:
+        content.append(_image_block_from_url(url))
+    for path in image_paths or []:
+        content.append(_image_block_from_path(path))
+    # Text follows images — the docs recommend this for best results.
+    content.append({"type": "text", "text": prompt})
+
+    client = get_client()
+    model_id = model or DEFAULT_MODEL
+    kwargs: dict[str, Any] = {
+        "model": model_id,
+        "max_tokens": int(max_tokens),
+        "messages": [{"role": "user", "content": content}],
+        "temperature": float(temperature),
+    }
+    if system:
+        kwargs["system"] = _system_param(system, cache=cache_system)
+
+    response = client.messages.create(**kwargs)
+    text = "".join(
+        getattr(b, "text", "") for b in response.content if getattr(b, "type", "") == "text"
+    )
+    return {
+        "text": text,
+        "model": getattr(response, "model", model_id),
+        "stop_reason": getattr(response, "stop_reason", ""),
+        "image_count": len(content) - 1,  # exclude the text block
+        **_usage_fields(response),
+    }

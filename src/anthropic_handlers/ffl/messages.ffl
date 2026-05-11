@@ -15,7 +15,9 @@ namespace anthropic.messages {
         model: String,
         stop_reason: String,
         input_tokens: Long,
-        output_tokens: Long
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
     }
 
     /** Token-count result for a prepared request. */
@@ -33,7 +35,8 @@ namespace anthropic.messages {
         prompt: String,
         system: String = "",
         model: String = "",
-        max_tokens: Long = 1024) => (result: MessageResult)
+        max_tokens: Long = 1024,
+        cache_system: Boolean = false) => (result: MessageResult)
 
     /**
      * Count input tokens for a prepared request before sending it.
@@ -69,4 +72,70 @@ namespace anthropic.messages {
             input_tokens = tokens.count.input_tokens,
             output_tokens = reply.result.output_tokens)
     }
+
+    /** Result of a single tool-use round. */
+    schema ToolUseResult {
+        text: String,
+        tool_uses_json: String,
+        messages_json: String,
+        stop_reason: String,
+        model: String,
+        input_tokens: Long,
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
+    }
+
+    /**
+     * Single round of a tool-use conversation.
+     *
+     * `tools_json` is a JSON-serialised list of tool definitions
+     * (each is an object with name / description / input_schema,
+     * matching the Anthropic SDK shape). `messages_json` may carry an
+     * existing conversation history (JSON-serialised list of
+     * {role, content}) — pass an empty string for the first round.
+     *
+     * The returned `tool_uses_json` is a JSON list of tool_use blocks
+     * the model requested (each with id, name, input). The caller
+     * executes each tool and threads results back via `messages_json`
+     * on the next call. Multi-round loops live in handler / workflow
+     * code (FFL has no `while`); for a turnkey Python loop, call
+     * `run_tool_use_loop` on the Python side.
+     */
+    event facet CreateMessageWithTools(
+        prompt: String = "",
+        tools_json: String,
+        messages_json: String = "",
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024,
+        cache_system: Boolean = false) => (result: ToolUseResult)
+
+    /** Result of a vision call (one or more images plus a prompt). */
+    schema VisionResult {
+        text: String,
+        model: String,
+        stop_reason: String,
+        image_count: Long,
+        input_tokens: Long,
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
+    }
+
+    /**
+     * Single-turn vision call. Sends `prompt` together with one or
+     * more images. `image_urls` and `image_paths` are
+     * comma-separated lists — URLs go in as URL blocks, paths are
+     * read from disk and sent as base64 blocks. At least one of the
+     * two must be non-empty.
+     */
+    event facet CreateMessageWithImages(
+        prompt: String,
+        image_urls: String = "",
+        image_paths: String = "",
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024,
+        cache_system: Boolean = false) => (result: VisionResult)
 }

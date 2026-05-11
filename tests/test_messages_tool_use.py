@@ -383,7 +383,7 @@ class TestDispatchExtended:
 
         assert "anthropic.messages.CreateMessageWithTools" in mh._DISPATCH
 
-    def test_package_registers_all_three(self):
+    def test_package_registers_messages_facets(self):
         import anthropic_handlers
 
         runner = MagicMock()
@@ -391,8 +391,12 @@ class TestDispatchExtended:
         registered = {
             call.kwargs["facet_name"] for call in runner.register_handler.call_args_list
         }
-        assert registered == {
+        # The four messages facets we've wired so far; other areas are still stubs.
+        expected_subset = {
             "anthropic.messages.CreateMessage",
             "anthropic.messages.CountTokens",
             "anthropic.messages.CreateMessageWithTools",
+            "anthropic.messages.CreateMessageWithImages",
         }
+        assert expected_subset <= registered
+        assert all(f.startswith("anthropic.messages.") for f in registered)

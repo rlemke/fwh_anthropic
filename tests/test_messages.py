@@ -164,13 +164,14 @@ class TestMessagesHandlers:
         with patch.object(msg_lib, "get_client", return_value=client):
             out = mh._create_message_handler({"prompt": "test"})
 
-        assert out == {"result": {
-            "text": "OK.",
-            "model": "claude-sonnet-4-6",
-            "stop_reason": "end_turn",
-            "input_tokens": 12,
-            "output_tokens": 7,
-        }}
+        assert out["result"]["text"] == "OK."
+        assert out["result"]["model"] == "claude-sonnet-4-6"
+        assert out["result"]["stop_reason"] == "end_turn"
+        assert out["result"]["input_tokens"] == 12
+        assert out["result"]["output_tokens"] == 7
+        # Cache fields default to 0 when the request didn't use caching.
+        assert out["result"]["cache_creation_input_tokens"] == 0
+        assert out["result"]["cache_read_input_tokens"] == 0
 
     def test_count_tokens_handler_wraps_result(self):
         from anthropic_handlers.handlers.messages import messages_handlers as mh
