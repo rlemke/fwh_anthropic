@@ -362,8 +362,10 @@ class TestDispatchWithImages:
 
         assert "anthropic.messages.CreateMessageWithImages" in mh._DISPATCH
 
-    def test_dispatch_size_grows(self):
+    def test_dispatch_includes_images_after_extension(self):
         from anthropic_handlers.handlers.messages import messages_handlers as mh
 
-        # CreateMessage, CountTokens, CreateMessageWithTools, CreateMessageWithImages.
-        assert len(mh._DISPATCH) == 4
+        # Images facet is wired alongside the others; size is asserted
+        # exactly in tests/test_messages_streaming.py::TestDispatchWithStream.
+        assert "anthropic.messages.CreateMessageWithImages" in mh._DISPATCH
+        assert len(mh._DISPATCH) >= 4

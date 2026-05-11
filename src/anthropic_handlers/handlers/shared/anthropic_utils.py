@@ -37,6 +37,7 @@ from anthropic_handlers.tools._lib.messages import (  # noqa: F401
     create_message_with_images,
     create_message_with_tools,
     run_tool_use_loop,
+    stream_message,
 )
 
 __all__ = [
@@ -58,4 +59,5 @@ __all__ = [
     "create_message_with_images",
     "create_message_with_tools",
     "run_tool_use_loop",
+    "stream_message",
 ]

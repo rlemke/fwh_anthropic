@@ -138,4 +138,35 @@ namespace anthropic.messages {
         model: String = "",
         max_tokens: Long = 1024,
         cache_system: Boolean = false) => (result: VisionResult)
+
+    /**
+     * Result of a streaming Messages call. Same shape as MessageResult
+     * with an extra `chunk_count` reporting how many text deltas were
+     * emitted by the SSE stream.
+     */
+    schema StreamResult {
+        text: String,
+        model: String,
+        stop_reason: String,
+        chunk_count: Long,
+        input_tokens: Long,
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
+    }
+
+    /**
+     * Streaming Messages call. The handler consumes the SSE stream
+     * server-side and emits each text delta to the step log as it
+     * arrives (so the dashboard shows progressive output), then
+     * returns the final assembled text + usage. Use this when the
+     * generation is long enough that per-token progress matters; for
+     * one-shot prompts, `CreateMessage` is simpler.
+     */
+    event facet CreateMessageStream(
+        prompt: String,
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024,
+        cache_system: Boolean = false) => (result: StreamResult)
 }

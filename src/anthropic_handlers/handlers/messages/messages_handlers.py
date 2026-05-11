@@ -22,6 +22,7 @@ from ..shared.anthropic_utils import (
     create_message_with_images,
     create_message_with_tools,
     redact_prompt,
+    stream_message,
 )
 
 log = logging.getLogger(__name__)
@@ -168,12 +169,47 @@ def _create_message_with_images_handler(payload: dict) -> dict[str, Any]:
     }
 
 
+def _create_message_stream_handler(payload: dict) -> dict[str, Any]:
+    prompt = payload["prompt"]
+    system = payload.get("system", "")
+    model = payload.get("model") or None
+    max_tokens = int(payload.get("max_tokens", 1024))
+    temperature = float(payload.get("temperature", 1.0))
+    cache_system = bool(payload.get("cache_system", False))
+
+    step_log = payload.get("_step_log")
+    cache_marker = " [cached]" if cache_system else ""
+    if step_log:
+        step_log(
+            f"CreateMessageStream: model={model or DEFAULT_MODEL}{cache_marker} "
+            f"prompt={redact_prompt(prompt)}"
+        )
+
+    # Surface each delta to the step log so the dashboard renders
+    # progressive output. Each chunk is redacted to keep log lines short.
+    def _on_chunk(delta: str) -> None:
+        if step_log:
+            step_log(f"chunk: {redact_prompt(delta, max_chars=40)}")
+
+    out = stream_message(
+        prompt=prompt,
+        system=system,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+        cache_system=cache_system,
+        on_chunk=_on_chunk,
+    )
+    return {"result": out}
+
+
 # RegistryRunner dispatch adapter
 _DISPATCH: dict[str, Any] = {
     f"{NAMESPACE}.CreateMessage": _create_message_handler,
     f"{NAMESPACE}.CountTokens": _count_tokens_handler,
     f"{NAMESPACE}.CreateMessageWithTools": _create_message_with_tools_handler,
     f"{NAMESPACE}.CreateMessageWithImages": _create_message_with_images_handler,
+    f"{NAMESPACE}.CreateMessageStream": _create_message_stream_handler,
 }
 
 

@@ -8,14 +8,13 @@ Public surface:
 - :func:`count_tokens`               — ``messages.count_tokens`` for a prepared request
 - :func:`create_message_with_tools`  — single round with tool definitions; returns text + tool_use blocks + full message history so callers can drive multi-turn loops themselves
 - :func:`create_message_with_images` — vision: send one or more images (URLs or local files) alongside the prompt
+- :func:`stream_message`             — streaming Messages call; same return shape as ``create_message`` plus a caller-supplied ``on_chunk`` callback for progressive output
 - :func:`run_tool_use_loop`          — Python-side convenience: full multi-turn tool loop with caller-supplied tool implementations (dict of name → callable)
 
-Prompt caching is supported on ``create_message`` and
-``create_message_with_tools`` via the ``cache_system`` kwarg — set to
-``True`` to mark the system prompt with ``cache_control = ephemeral``
-so Anthropic reuses the encoded prefix on subsequent calls.
-
-Streaming is deliberately *not* in this cut.
+Prompt caching is supported on every ``create_message*`` / ``stream_message``
+call via the ``cache_system`` kwarg — set to ``True`` to mark the
+system prompt with ``cache_control = ephemeral`` so Anthropic reuses
+the encoded prefix on subsequent calls.
 
 Each function:
 
@@ -445,4 +444,69 @@ def create_message_with_images(
         "stop_reason": getattr(response, "stop_reason", ""),
         "image_count": len(content) - 1,  # exclude the text block
         **_usage_fields(response),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Streaming
+# ---------------------------------------------------------------------------
+
+
+def stream_message(
+    *,
+    prompt: str,
+    system: str = "",
+    model: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float = 1.0,
+    cache_system: bool = False,
+    on_chunk: Callable[[str], None] | None = None,
+) -> dict[str, Any]:
+    """Streaming Messages call (server-sent events under the hood).
+
+    Same kwargs as :func:`create_message`. When ``on_chunk`` is
+    provided, it's invoked with each text delta as the model emits it
+    — useful for shells that want to print tokens as they come, or
+    UIs that want to render progressively.
+
+    Returns the same dict shape as :func:`create_message` plus a
+    ``chunk_count`` field. The stream is fully consumed inside the
+    function; the dict return contract is preserved so workflows and
+    handlers don't have to deal with iterators.
+    """
+    if not prompt:
+        raise ValueError("prompt must not be empty")
+    if cache_system and not system:
+        raise ValueError("cache_system=True requires a non-empty system prompt")
+
+    client = get_client()
+    model_id = model or DEFAULT_MODEL
+    kwargs: dict[str, Any] = {
+        "model": model_id,
+        "max_tokens": int(max_tokens),
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": float(temperature),
+    }
+    if system:
+        kwargs["system"] = _system_param(system, cache=cache_system)
+
+    chunks: list[str] = []
+    with client.messages.stream(**kwargs) as stream:
+        for delta in stream.text_stream:
+            if not delta:
+                continue
+            chunks.append(delta)
+            if on_chunk is not None:
+                on_chunk(delta)
+        final = stream.get_final_message()
+
+    text = "".join(
+        getattr(b, "text", "") for b in (final.content or []) if getattr(b, "type", "") == "text"
+    )
+    return {
+        "text": text,
+        "model": getattr(final, "model", model_id),
+        "stop_reason": getattr(final, "stop_reason", ""),
+        "chunk_count": len(chunks),
+        **_usage_fields(final),
     }
