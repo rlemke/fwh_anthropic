@@ -1,0 +1,18 @@
+/**
+ * ComputerUse integration namespace.
+ *
+ * Wraps the Computer Use beta.
+ * Reference: https://github.com/anthropics/anthropic-quickstarts
+ *
+ * Status: scaffolded. Event facets and workflows will be added here as
+ * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
+ * for the contract.
+ */
+namespace anthropic.computer {
+
+    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
+    schema ComputerUsePlaceholder {
+        status: String
+    }
+
+}

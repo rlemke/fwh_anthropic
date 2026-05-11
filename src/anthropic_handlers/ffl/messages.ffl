@@ -1,0 +1,18 @@
+/**
+ * Messages integration namespace.
+ *
+ * Wraps the Messages API (prompt caching, vision, streaming, tool use).
+ * Reference: https://github.com/anthropics/anthropic-sdk-python
+ *
+ * Status: scaffolded. Event facets and workflows will be added here as
+ * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
+ * for the contract.
+ */
+namespace anthropic.messages {
+
+    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
+    schema MessagesPlaceholder {
+        status: String
+    }
+
+}

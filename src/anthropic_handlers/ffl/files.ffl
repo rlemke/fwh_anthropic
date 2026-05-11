@@ -1,0 +1,18 @@
+/**
+ * Files integration namespace.
+ *
+ * Wraps the Files API + citations.
+ * Reference: https://github.com/anthropics/anthropic-sdk-python
+ *
+ * Status: scaffolded. Event facets and workflows will be added here as
+ * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
+ * for the contract.
+ */
+namespace anthropic.files {
+
+    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
+    schema FilesPlaceholder {
+        status: String
+    }
+
+}

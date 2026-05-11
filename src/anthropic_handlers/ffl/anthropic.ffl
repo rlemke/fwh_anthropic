@@ -1,0 +1,22 @@
+/**
+ * Top-level catalog namespace for the anthropic integration package.
+ *
+ * Composed / cross-area workflows live here. Per-area declarations
+ * (event facets, schemas) live in their own files:
+ *
+ *   - messages.ffl      anthropic.messages.*
+ *   - batch.ffl         anthropic.batch.*
+ *   - files.ffl         anthropic.files.*
+ *   - agent_sdk.ffl     anthropic.agent.*
+ *   - claude_code.ffl   anthropic.code.*
+ *   - computer_use.ffl  anthropic.computer.*
+ */
+namespace anthropic {
+
+    /** Versioning marker for the anthropic integration catalog. */
+    schema AnthropicCatalog {
+        version: String,
+        areas: String
+    }
+
+}

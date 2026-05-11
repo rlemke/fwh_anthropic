@@ -1,0 +1,1 @@
+"""Files integration handlers (scaffold)."""

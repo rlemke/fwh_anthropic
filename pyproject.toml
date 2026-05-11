@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fwh-anthropic"
+version = "0.1.0"
+description = "Facetwork FFL/handlers wrapping Anthropic APIs and tools (Messages, Batch, Files, Agent SDK, Claude Code, Computer Use, MCP, …)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "Ralph Lemke"}]
+keywords = ["facetwork", "ffl", "anthropic", "claude", "agent", "mcp"]
+
+dependencies = [
+    "facetwork>=0.31.0",
+    "anthropic>=0.40",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.8.0",
+]
+# Per-area optionals — installed only when the matching handler subpackage is wired up.
+batch = []
+files = []
+agent_sdk = ["claude-agent-sdk>=0.1"]
+claude_code = []
+computer_use = []
+mcp = ["mcp>=0.9"]
+
+[project.urls]
+Repository = "https://github.com/rlemke/fwh_anthropic"
+Anthropic = "https://github.com/anthropics"
+
+[project.entry-points."facetwork.examples"]
+anthropic = "anthropic_handlers:example"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+anthropic_handlers = [
+    "ffl/*.ffl",
+    "handlers/**/ffl/*.ffl",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+ignore = ["E501", "E402", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src/anthropic_handlers/handlers"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

@@ -1,0 +1,1 @@
+"""Messages integration handlers (scaffold)."""

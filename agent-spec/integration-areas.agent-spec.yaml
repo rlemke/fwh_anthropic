@@ -1,0 +1,75 @@
+name: anthropic-integration-areas
+version: 0.1.0
+purpose: |
+  Contract for adding a new "integration area" subpackage to fwh_anthropic.
+  An area is one Anthropic surface (Messages, Batch, Files, Agent SDK,
+  Claude Code, Computer Use, MCP, evals, …). Areas are independent —
+  adding one never touches another area's code.
+
+motivation: |
+  Most fwh_* packages are organised by problem domain (osm, weather,
+  jenkins, …). fwh_anthropic is the exception: it covers one *vendor
+  surface* split into many *integration areas*. Holding the surface
+  together in one repo keeps the Anthropic SDK dependency, auth
+  handling, rate-limit policy, and version cadence shared. Independent
+  areas keep growth additive.
+
+required_files:
+  - path: "src/anthropic_handlers/tools/_lib/<area>.py"
+    purpose: |
+      Pure-function wrappers over the Anthropic SDK for this area.
+      Import the shared client from ``.client``. Lazy-import any
+      optional dependency (``claude-agent-sdk``, ``mcp``, …) inside
+      functions, not at module top level — so importing the package
+      without that extra installed still works.
+  - path: "src/anthropic_handlers/handlers/<area>/__init__.py"
+    purpose: "Subpackage marker."
+  - path: "src/anthropic_handlers/handlers/<area>/<area>_handlers.py"
+    purpose: |
+      Payload-dict adapters that translate FFL payloads into typed
+      kwargs and call the matching ``tools/_lib/<area>.py`` function
+      via the shim. Must export ``_DISPATCH``, ``handle(payload)``,
+      and ``register_handlers(runner)``. Optionally export
+      ``register_<area>_handlers(poller)`` for the legacy AgentPoller.
+  - path: "src/anthropic_handlers/ffl/<area>.ffl"
+    purpose: |
+      Namespace + event-facet declarations. Recommended namespace:
+      ``anthropic.<short-area-name>`` (e.g. ``anthropic.messages``).
+      Workflows that compose multiple areas live in the top-level
+      ``ffl/anthropic.ffl`` catalog, not the per-area file.
+
+optional_files:
+  - path: "src/anthropic_handlers/tools/<verb>-<noun>.py + .sh"
+    purpose: |
+      One CLI per facet — argparse + thin wrapper around the
+      corresponding ``tools/_lib/<area>.py`` function. Same JSON-out
+      convention as every other fwh_* repo.
+  - path: "tests/test_<area>.py"
+    purpose: |
+      Mocked tests using ``unittest.mock`` over the Anthropic client.
+      Live tests gated by ``ANTHROPIC_API_KEY`` env var.
+
+wiring:
+  - "Add `from .<area>.<area>_handlers import register_handlers as reg_<area>` to handlers/__init__.py::register_all_registry_handlers and call reg_<area>(runner)."
+  - "Re-export key public symbols from handlers/shared/anthropic_utils.py so other areas can compose."
+  - "If the area needs an optional dep, add it to pyproject.toml's [project.optional-dependencies] under a key matching the area name."
+
+import_discipline:
+  - "Handlers use relative imports (`from ..shared.anthropic_utils import …`)."
+  - "Shim re-exports from `anthropic_handlers.tools._lib.<area>` using the **fully-qualified** path so this package coexists cleanly with sibling fwh_* packages on `sys.modules` (the bare-`_lib` collision pattern that bit osm/noaa-weather initially)."
+  - "Tests use absolute paths: `from anthropic_handlers.handlers.<area>.<area>_handlers import …`."
+
+naming:
+  area_directory: "snake_case, matches the Anthropic surface (e.g. `messages`, `batch`, `files`, `agent_sdk`, `claude_code`, `computer_use`, `mcp`, `evals`, `cookbook`)."
+  ffl_namespace: "`anthropic.<short-name>` — keep short (`anthropic.messages`, not `anthropic.messages_api`)."
+  facet_name: "PascalCase verb-noun matching the SDK method (e.g. `CreateMessage`, `CreateBatch`, `UploadFile`, `RunAgent`)."
+
+testing:
+  - "Mock the Anthropic client at the boundary (`anthropic.Anthropic`) — never hit the real API in unit tests."
+  - "Provide a `--live` pytest marker for opt-in integration tests gated by `ANTHROPIC_API_KEY`."
+  - "Each area's tests live under `tests/test_<area>.py` and import only its subpackage so missing optional deps don't break the whole suite."
+
+human_docs:
+  - "https://docs.anthropic.com/ — the SDK + API reference"
+  - "https://github.com/anthropics — the source of truth for which integration areas exist"
+  - "README.md at this repo's root — the current area roster + install notes"

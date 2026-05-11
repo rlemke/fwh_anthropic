@@ -1,0 +1,1 @@
+"""Batch integration handlers (scaffold)."""
