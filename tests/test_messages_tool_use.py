@@ -399,4 +399,5 @@ class TestDispatchExtended:
             "anthropic.messages.CreateMessageWithImages",
         }
         assert expected_subset <= registered
-        assert all(f.startswith("anthropic.messages.") for f in registered)
+        # Other wired areas (e.g. anthropic.agent.*) may add to the set.
+        assert any(f.startswith("anthropic.messages.") for f in registered)

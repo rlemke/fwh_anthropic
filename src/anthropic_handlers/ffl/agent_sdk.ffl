@@ -1,18 +1,51 @@
 /**
- * AgentSdk integration namespace.
+ * Claude Agent SDK integration namespace.
  *
- * Wraps the Claude Agent SDK.
- * Reference: https://github.com/anthropics/claude-agent-sdk-python
+ * Wraps https://github.com/anthropics/claude-agent-sdk-python — the
+ * library that puts Claude Code's autonomous-agent runtime (planning,
+ * tool use, memory, permission gating) into a Python-callable API.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * The current cut covers the "single prompt, run to completion"
+ * pattern (`RunAgent`). Multi-turn interactive sessions
+ * (ClaudeSDKClient.*) will be added later as separate facets.
+ *
+ * Optional dependency: install the package with `[agent_sdk]` extra
+ * before using these facets at runtime:
+ *
+ *     pip install -e '.[agent_sdk]'
  */
 namespace anthropic.agent {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema AgentSdkPlaceholder {
-        status: String
+    /** Result of running a single Claude Agent SDK session. */
+    schema AgentResult {
+        text: String,
+        turns: Long,
+        stop_reason: String,
+        trace_json: String,
+        input_tokens: Long,
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
     }
 
+    /**
+     * Run the Agent SDK against a single prompt and return when the
+     * agent finishes (or hits `max_turns`).
+     *
+     * `allowed_tools` is a comma-separated list of tool names the
+     * agent may use (empty = SDK defaults; common values include
+     * `Read`, `Write`, `Edit`, `Bash`, `Glob`, `Grep`, plus any
+     * custom tools registered via `@tool`).
+     *
+     * `permission_mode` mirrors the SDK enum verbatim — common
+     * values: `default`, `acceptEdits`, `bypassPermissions`,
+     * `plan`. Pass the empty string to use the SDK default.
+     */
+    event facet RunAgent(
+        prompt: String,
+        system: String = "",
+        model: String = "",
+        max_turns: Long = 10,
+        allowed_tools: String = "",
+        permission_mode: String = "default") => (result: AgentResult)
 }

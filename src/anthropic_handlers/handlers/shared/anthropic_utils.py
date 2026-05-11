@@ -40,6 +40,9 @@ from anthropic_handlers.tools._lib.messages import (  # noqa: F401
     stream_message,
 )
 
+# --- agent_sdk area ----------------------------------------------------------
+from anthropic_handlers.tools._lib.agent_sdk import run_agent  # noqa: F401
+
 __all__ = [
     # Shared SDK client + helpers
     "client",
@@ -60,4 +63,6 @@ __all__ = [
     "create_message_with_tools",
     "run_tool_use_loop",
     "stream_message",
+    # Agent SDK public surface
+    "run_agent",
 ]

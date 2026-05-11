@@ -266,6 +266,5 @@ class TestPackageRegistration:
         }
         assert "anthropic.messages.CreateMessage" in registered
         assert "anthropic.messages.CountTokens" in registered
-        # Everything registered should still be in the messages namespace
-        # (the other areas are still stubs and contribute nothing).
-        assert all(f.startswith("anthropic.messages.") for f in registered)
+        # Other wired areas (e.g. anthropic.agent.*) may add to the set.
+        assert any(f.startswith("anthropic.messages.") for f in registered)
