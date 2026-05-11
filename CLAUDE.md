@@ -59,9 +59,27 @@ scripts/start-runner --example anthropic -- --log-format text
 # Inspect wiring status
 src/anthropic_handlers/tools/list-areas.sh
 
-# Tests
-pytest tests/ src/anthropic_handlers/handlers/ -v
+# Mocked tests (default; no API calls)
+pytest
+
+# Live tests against the real Anthropic API (opt-in)
+ANTHROPIC_API_KEY=sk-... pytest tests/live -m live --run-live
 ```
+
+## Test gating
+
+The unit suite mocks the Anthropic SDK at the `get_client()` boundary
+— no network, no key needed. Live tests under `tests/live/` are
+double-gated:
+
+- `pyproject.toml` sets `addopts = -m 'not live'`, so default runs
+  skip them.
+- `tests/conftest.py` adds a `--run-live` flag; even when filtering
+  to `-m live`, the tests skip unless `--run-live` is passed AND
+  `ANTHROPIC_API_KEY` is set.
+
+Don't remove either gate. The second one catches the easy mistake of
+running `-m live` without intending to spend tokens.
 
 ## Tools / handlers / _lib pattern (per area)
 
@@ -82,16 +100,25 @@ coexists cleanly with sibling Facetwork example packages on
 `sys.modules` (the bare-`_lib` collision pattern that bit
 osm/noaa-weather initially).
 
-## Initial area roster
+## Area roster
 
-| Area | FFL namespace | What it wraps | Status |
+All six initial areas are wired today — 16 facets total + one
+cross-area composition workflow. Run `tools/list-areas.sh` for the
+live count.
+
+| Area | FFL namespace | What it wraps | Facets |
 |------|---------------|---------------|--------|
-| `messages` | `anthropic.messages` | Messages API (prompt caching, vision, streaming, tool use) | scaffolded |
-| `batch` | `anthropic.batch` | Message Batches API | scaffolded |
-| `files` | `anthropic.files` | Files API + citations | scaffolded |
-| `agent_sdk` | `anthropic.agent` | Claude Agent SDK | scaffolded |
-| `claude_code` | `anthropic.code` | Claude Code CLI orchestration | scaffolded |
-| `computer_use` | `anthropic.computer` | Computer Use beta | scaffolded |
+| `messages` | `anthropic.messages` | Messages API (prompt caching, vision, streaming, tool use, file references) | 6 |
+| `batch` | `anthropic.batch` | Message Batches API (submit/status/results + `RunBatch` driver) | 4 |
+| `files` | `anthropic.files` | Files API (upload/list/delete) | 3 |
+| `agent_sdk` | `anthropic.agent` | Claude Agent SDK | 1 |
+| `claude_code` | `anthropic.code` | Claude Code CLI orchestration | 1 |
+| `computer_use` | `anthropic.computer` | Computer Use beta (simulator-backed by default) | 1 |
+
+Cross-area composition lives in `ffl/composition.ffl` under the
+`anthropic.compose` namespace:
+
+- `DocumentQA` — `Files.UploadFile` → `Messages.CreateMessageWithFile`
 
 Future areas (to add as new directories):
 `mcp`, `evals`, `cookbook`, `citations` (if split from messages),
@@ -115,6 +142,27 @@ See `agent-spec/integration-areas.agent-spec.yaml` for the contract a
 new area should satisfy (naming, import discipline, optional deps,
 tests).
 
+## Cross-area conventions
+
+FFL has no native support for arbitrary nested lists / maps, so cross-area
+flows carry list-of-dict payloads through **JSON-bridge fields** (string
+parameters that decode at the handler boundary). The conventions are:
+
+| Field | Where | Decodes to |
+|-------|-------|-----------|
+| `tools_json` | `Messages.CreateMessageWithTools` | list of tool definitions |
+| `messages_json` | `Messages.CreateMessageWithTools` | conversation history (role/content list) |
+| `tool_uses_json` | `ToolUseResult` | list of tool_use blocks |
+| `requests_json` | `Batch.SubmitBatch` / `RunBatch` | list of MessageBatchRequest |
+| `results_json` | `BatchResults` / `RunBatchResult` | list of per-request results |
+| `files_json` | `Files.ListFiles` | list of FileMetadata |
+| `trace_json` | `ComputerUse.RunComputerUseSession` | list of per-action records |
+| `file_ids` (comma-separated) | `Messages.CreateMessageWithFile` | list of file IDs |
+
+When adding a new cross-area facet, follow the same rule: scalars and
+flat structs go on the schema directly; anything list-of-dict gets a
+`*_json` field.
+
 ## Code review checklist
 
 - Keep `_lib/<area>.py` free of `facetwork.runtime` so CLIs stay
@@ -130,6 +178,9 @@ tests).
   logic.
 - Never log the API key or full prompt text at INFO+. Use redaction
   helpers from `tools/_lib/client.py`.
+- For convenience drivers that wrap polling loops (e.g.
+  `batch.run_batch`), accept a `sleep_fn` parameter so tests can drive
+  the loop deterministically without `time.sleep` actually firing.
 
 ## Domain research before implementation
 

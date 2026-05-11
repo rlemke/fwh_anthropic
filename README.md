@@ -2,23 +2,22 @@
 
 A standalone [Facetwork](https://github.com/rlemke/facetwork) example package
 that hosts FFL workflows and handlers wrapping the public surfaces
-published at [github.com/anthropics](https://github.com/anthropics):
+published at [github.com/anthropics](https://github.com/anthropics).
 
-- **Messages API** — prompt caching, vision inputs, streaming, tool use
-- **Batch API** — Message Batches for cost-efficient large-scale runs
-- **Files API** — uploads, citations, document attachments
-- **Agent SDK** — autonomous-agent facets backed by the Claude Agent SDK
-- **Claude Code** — invoke the Claude Code CLI from FFL workflows
-- **Computer Use** — long-running tool-use sessions managed by the runner
-- **MCP** — Model Context Protocol clients/servers as facets
-- **Evaluations & Cookbook** — pattern libraries lifted from the Anthropic cookbook
+| Area | Status | What it wraps |
+|------|--------|--------------|
+| **Messages API** | ✅ 6 facets | `CreateMessage`, `CountTokens`, `CreateMessageWithTools`, `CreateMessageWithImages`, `CreateMessageStream`, `CreateMessageWithFile` (Files-API RAG) |
+| **Batch API** | ✅ 4 facets | `SubmitBatch`, `GetBatchStatus`, `GetBatchResults`, `RunBatch` (submit + poll + retrieve driver) |
+| **Files API** | ✅ 3 facets | `UploadFile`, `ListFiles`, `DeleteFile` |
+| **Agent SDK** | ✅ 1 facet | `RunAgent` (Claude Agent SDK) |
+| **Claude Code** | ✅ 1 facet | `RunClaudeCode` (Claude Code CLI subprocess) |
+| **Computer Use** | ✅ 1 facet | `RunComputerUseSession` (simulator-backed by default) |
+| **Cross-area composition** | ✅ 1 workflow | `anthropic.compose.DocumentQA` (Files + Messages RAG) |
 
-**This is currently a scaffold.** The package layout is in place and the
-entry point resolves, but each area subpackage ships a stub
-`register_handlers` that's ready to be filled in. As individual areas
-are wired up, they're added to the matching `handlers/<area>/` +
-`tools/_lib/<area>.py` + `ffl/<area>.ffl` trio — no other repo-level
-changes required.
+All six initial areas are wired (16 facets total). Adding a new area
+(`mcp`, `evals`, `cookbook`, …) is purely additive — drop in
+`handlers/<area>/` + `tools/_lib/<area>.py` + `ffl/<area>.ffl` and
+wire it into `handlers/__init__.py`.
 
 Discovered by the Facetwork runner via the `facetwork.examples` entry point
 declared in `pyproject.toml`. After `pip install -e .`, Facetwork's
@@ -39,14 +38,12 @@ making it discoverable by any Facetwork installation in the same environment.
 ## Run from a Facetwork checkout
 
 ```bash
-# When areas are wired up, FFL workflows show up in the dashboard like this:
 scripts/seed-examples --include anthropic
 scripts/start-runner --example anthropic -- --log-format text
 ```
 
-All 6 areas are wired today (16 facets total — `messages` 6, `batch`
-4, `files` 3, `agent_sdk` 1, `claude_code` 1, `computer_use` 1) plus
-one cross-area composition workflow (`anthropic.compose.DocumentQA`).
+The runner reports `anthropic: 16 handlers registered  [entry_point]`.
+All facets show up in the dashboard's namespace browser.
 
 ## Inspect what areas are wired
 
@@ -85,13 +82,13 @@ fwh_anthropic/
     ├── handlers/
     │   ├── __init__.py                       # register_all_registry_handlers (calls every area)
     │   ├── shared/anthropic_utils.py         # shim into tools/_lib (auth, retry, rate-limit, …)
-    │   ├── messages/                         # Messages API (TODO)
-    │   ├── batch/                            # Batch API (TODO)
-    │   ├── files/                            # Files API (TODO)
-    │   ├── agent_sdk/                        # Agent SDK (TODO)
-    │   ├── claude_code/                      # Claude Code CLI (TODO)
-    │   └── computer_use/                     # Computer Use (TODO)
-    ├── ffl/                                  # one .ffl per area + a top-level catalog
+    │   ├── messages/                         # Messages API (6 facets)
+    │   ├── batch/                            # Batch API (4 facets)
+    │   ├── files/                            # Files API (3 facets)
+    │   ├── agent_sdk/                        # Agent SDK (1 facet)
+    │   ├── claude_code/                      # Claude Code CLI (1 facet)
+    │   └── computer_use/                     # Computer Use (1 facet)
+    ├── ffl/                                  # one .ffl per area + composition.ffl + anthropic.ffl
     └── tools/
         ├── _lib/                             # client, auth, rate-limit + one module per area
         │   ├── client.py
@@ -120,6 +117,15 @@ area needs the `mcp` package; the Agent SDK area needs the
 pip install -e ".[agent_sdk,mcp]"
 ```
 
+## Cross-area composition
+
+`anthropic.compose.DocumentQA` in `ffl/composition.ffl` is the
+canonical RAG pattern: upload a document with `anthropic.files.UploadFile`,
+then ask Claude about it via `anthropic.messages.CreateMessageWithFile`.
+The same pattern applies to any cross-area workflow — keep
+event-facet definitions in their per-area `.ffl` file and put the
+multi-step glue in `composition.ffl`.
+
 ## Adding a new area
 
 1. Pick a name that matches the Anthropic surface (e.g. `evals`, `cookbook`, `citations`).
@@ -127,7 +133,8 @@ pip install -e ".[agent_sdk,mcp]"
 3. Add `src/anthropic_handlers/handlers/<area>/__init__.py` exporting `register_handlers(runner)` + a `_DISPATCH` map.
 4. Add `src/anthropic_handlers/ffl/<area>.ffl` declaring the namespace + event facets.
 5. Wire it in `src/anthropic_handlers/handlers/__init__.py::register_all_registry_handlers`.
-6. (Optional) Re-export key symbols from `handlers/shared/anthropic_utils.py`.
+6. Add the area entry to `src/anthropic_handlers/tools/_lib/areas.py` so `list-areas.sh` picks it up.
+7. (Optional) Re-export key symbols from `handlers/shared/anthropic_utils.py`.
 
 See [`agent-spec/integration-areas.agent-spec.yaml`](agent-spec/integration-areas.agent-spec.yaml)
 for the contract a new area should satisfy.
