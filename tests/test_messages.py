@@ -211,10 +211,12 @@ class TestDispatch:
     def test_dispatch_has_expected_facets(self):
         from anthropic_handlers.handlers.messages import messages_handlers as mh
 
-        assert set(mh._DISPATCH.keys()) == {
+        # CreateMessage + CountTokens always; tool-use facet is covered
+        # in tests/test_messages_tool_use.py.
+        assert {
             "anthropic.messages.CreateMessage",
             "anthropic.messages.CountTokens",
-        }
+        } <= set(mh._DISPATCH.keys())
 
     def test_handle_routes_to_create_message(self):
         from anthropic_handlers.handlers.messages import messages_handlers as mh
@@ -239,14 +241,16 @@ class TestDispatch:
 
         runner = MagicMock()
         mh.register_handlers(runner)
-        assert runner.register_handler.call_count == 2
         registered = {
             call.kwargs["facet_name"] for call in runner.register_handler.call_args_list
         }
-        assert registered == {
+        # Each _DISPATCH entry registers exactly once.
+        assert registered == set(mh._DISPATCH.keys())
+        assert runner.register_handler.call_count == len(mh._DISPATCH)
+        assert {
             "anthropic.messages.CreateMessage",
             "anthropic.messages.CountTokens",
-        }
+        } <= registered
 
 
 class TestPackageRegistration:
@@ -261,5 +265,6 @@ class TestPackageRegistration:
         }
         assert "anthropic.messages.CreateMessage" in registered
         assert "anthropic.messages.CountTokens" in registered
-        # Exactly 2 facets right now (the other areas are still stubs).
-        assert len(registered) == 2
+        # Everything registered should still be in the messages namespace
+        # (the other areas are still stubs and contribute nothing).
+        assert all(f.startswith("anthropic.messages.") for f in registered)

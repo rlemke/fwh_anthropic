@@ -13,10 +13,13 @@ import logging
 import os
 from typing import Any
 
+import json
+
 from ..shared.anthropic_utils import (
     DEFAULT_MODEL,
     count_tokens,
     create_message,
+    create_message_with_tools,
     redact_prompt,
 )
 
@@ -63,10 +66,69 @@ def _count_tokens_handler(payload: dict) -> dict[str, Any]:
     return {"count": count_tokens(prompt=prompt, system=system, model=model)}
 
 
+def _create_message_with_tools_handler(payload: dict) -> dict[str, Any]:
+    tools_json = payload.get("tools_json", "")
+    if not tools_json:
+        raise ValueError("CreateMessageWithTools requires tools_json")
+    tools = json.loads(tools_json)
+    if not isinstance(tools, list):
+        raise ValueError("tools_json must decode to a JSON list of tool definitions")
+
+    prompt = payload.get("prompt", "") or ""
+    messages_json = payload.get("messages_json", "") or ""
+    if messages_json:
+        messages_history = json.loads(messages_json)
+        if not isinstance(messages_history, list):
+            raise ValueError("messages_json must decode to a JSON list")
+        request: Any = messages_history
+        first_user_text = prompt or "<history>"
+    else:
+        if not prompt:
+            raise ValueError(
+                "CreateMessageWithTools requires either prompt or messages_json"
+            )
+        request = prompt
+        first_user_text = prompt
+
+    system = payload.get("system", "")
+    model = payload.get("model") or None
+    max_tokens = int(payload.get("max_tokens", 1024))
+    temperature = float(payload.get("temperature", 1.0))
+
+    step_log = payload.get("_step_log")
+    if step_log:
+        step_log(
+            f"CreateMessageWithTools: model={model or DEFAULT_MODEL} "
+            f"tools={len(tools)} prompt={redact_prompt(first_user_text)}"
+        )
+    out = create_message_with_tools(
+        prompt=request,
+        tools=tools,
+        system=system,
+        model=model,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    # FFL doesn't natively model arbitrary lists of objects; JSON-serialise
+    # the bridge fields so workflows can carry them through to the next round.
+    return {
+        "result": {
+            "text": out["text"],
+            "tool_uses_json": json.dumps(out["tool_uses"]),
+            "messages_json": json.dumps(out["messages"], default=str),
+            "stop_reason": out["stop_reason"],
+            "model": out["model"],
+            "input_tokens": out["input_tokens"],
+            "output_tokens": out["output_tokens"],
+        }
+    }
+
+
 # RegistryRunner dispatch adapter
 _DISPATCH: dict[str, Any] = {
     f"{NAMESPACE}.CreateMessage": _create_message_handler,
     f"{NAMESPACE}.CountTokens": _count_tokens_handler,
+    f"{NAMESPACE}.CreateMessageWithTools": _create_message_with_tools_handler,
 }
 
 

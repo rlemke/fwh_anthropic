@@ -34,6 +34,8 @@ from anthropic_handlers.tools._lib import agent_sdk, batch, claude_code, compute
 from anthropic_handlers.tools._lib.messages import (  # noqa: F401
     count_tokens,
     create_message,
+    create_message_with_tools,
+    run_tool_use_loop,
 )
 
 __all__ = [
@@ -52,4 +54,6 @@ __all__ = [
     # Messages API public surface
     "count_tokens",
     "create_message",
+    "create_message_with_tools",
+    "run_tool_use_loop",
 ]
