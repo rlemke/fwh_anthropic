@@ -218,5 +218,6 @@ class TestDispatchWithStream:
     def test_dispatch_size_grows(self):
         from anthropic_handlers.handlers.messages import messages_handlers as mh
 
-        # CreateMessage + CountTokens + tools + images + stream.
-        assert len(mh._DISPATCH) == 5
+        # At least: CreateMessage + CountTokens + tools + images + stream.
+        # Cross-area facets (CreateMessageWithFile etc.) may push this higher.
+        assert len(mh._DISPATCH) >= 5

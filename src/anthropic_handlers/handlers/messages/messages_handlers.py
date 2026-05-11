@@ -19,6 +19,7 @@ from ..shared.anthropic_utils import (
     DEFAULT_MODEL,
     count_tokens,
     create_message,
+    create_message_with_file,
     create_message_with_images,
     create_message_with_tools,
     redact_prompt,
@@ -203,6 +204,41 @@ def _create_message_stream_handler(payload: dict) -> dict[str, Any]:
     return {"result": out}
 
 
+def _create_message_with_file_handler(payload: dict) -> dict[str, Any]:
+    prompt = payload["prompt"]
+    file_ids_raw = payload.get("file_ids", "") or ""
+    file_ids = [f.strip() for f in file_ids_raw.split(",") if f.strip()]
+    if not file_ids:
+        raise ValueError("CreateMessageWithFile requires file_ids (comma-separated)")
+    file_type = payload.get("file_type") or "document"
+
+    system = payload.get("system", "")
+    model = payload.get("model") or None
+    max_tokens = int(payload.get("max_tokens", 1024))
+    temperature = float(payload.get("temperature", 1.0))
+    cache_system = bool(payload.get("cache_system", False))
+
+    step_log = payload.get("_step_log")
+    if step_log:
+        cache_marker = " [cached]" if cache_system else ""
+        step_log(
+            f"CreateMessageWithFile: model={model or DEFAULT_MODEL}{cache_marker} "
+            f"files={len(file_ids)} type={file_type} prompt={redact_prompt(prompt)}"
+        )
+    return {
+        "result": create_message_with_file(
+            prompt=prompt,
+            file_ids=file_ids,
+            file_type=file_type,
+            system=system,
+            model=model,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            cache_system=cache_system,
+        )
+    }
+
+
 # RegistryRunner dispatch adapter
 _DISPATCH: dict[str, Any] = {
     f"{NAMESPACE}.CreateMessage": _create_message_handler,
@@ -210,6 +246,7 @@ _DISPATCH: dict[str, Any] = {
     f"{NAMESPACE}.CreateMessageWithTools": _create_message_with_tools_handler,
     f"{NAMESPACE}.CreateMessageWithImages": _create_message_with_images_handler,
     f"{NAMESPACE}.CreateMessageStream": _create_message_stream_handler,
+    f"{NAMESPACE}.CreateMessageWithFile": _create_message_with_file_handler,
 }
 
 

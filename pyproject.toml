@@ -59,3 +59,10 @@ ignore = ["E501", "E402", "B008"]
 testpaths = ["tests", "src/anthropic_handlers/handlers"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
+# `live` tests hit the real Anthropic API and are skipped unless
+# ANTHROPIC_API_KEY is set AND `--run-live` is passed. Filter normal
+# runs to exclude them so CI doesn't spend tokens.
+markers = [
+    "live: hits the real Anthropic API; opt-in only (requires ANTHROPIC_API_KEY + --run-live)",
+]
+addopts = "-m 'not live'"

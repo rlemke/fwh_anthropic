@@ -268,3 +268,97 @@ class TestPackageRegistration:
         assert "anthropic.messages.CountTokens" in registered
         # Other wired areas (e.g. anthropic.agent.*) may add to the set.
         assert any(f.startswith("anthropic.messages.") for f in registered)
+
+
+# ---------------------------------------------------------------------------
+# CreateMessageWithFile — cross-area (Messages references Files-API uploads)
+# ---------------------------------------------------------------------------
+
+
+def _file_message_mock_client(*, reply_text="The doc says X."):
+    """Client whose messages.create echoes how many file blocks it received."""
+    client = MagicMock()
+    response = SimpleNamespace(
+        content=[SimpleNamespace(type="text", text=reply_text)],
+        model="claude-sonnet-4-6",
+        stop_reason="end_turn",
+        usage=SimpleNamespace(input_tokens=20, output_tokens=4),
+    )
+    client.messages.create = MagicMock(return_value=response)
+    return client
+
+
+class TestCreateMessageWithFile:
+    def test_packs_files_as_document_blocks_then_text(self):
+        from anthropic_handlers.tools._lib import messages as msg_lib
+
+        client = _file_message_mock_client()
+        with patch.object(msg_lib, "get_client", return_value=client):
+            out = msg_lib.create_message_with_file(
+                prompt="Summarise this contract.",
+                file_ids=["file_a", "file_b"],
+            )
+        kwargs = client.messages.create.call_args.kwargs
+        content = kwargs["messages"][0]["content"]
+        # Two file blocks followed by one text block, in order.
+        assert [b["type"] for b in content] == ["document", "document", "text"]
+        assert content[0]["source"] == {"type": "file", "file_id": "file_a"}
+        assert content[1]["source"] == {"type": "file", "file_id": "file_b"}
+        assert content[2]["text"] == "Summarise this contract."
+        assert out["file_count"] == 2
+        assert out["text"] == "The doc says X."
+
+    def test_supports_image_blocks(self):
+        from anthropic_handlers.tools._lib import messages as msg_lib
+
+        client = _file_message_mock_client()
+        with patch.object(msg_lib, "get_client", return_value=client):
+            msg_lib.create_message_with_file(
+                prompt="What's in this picture?",
+                file_ids=["file_img"],
+                file_type="image",
+            )
+        content = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        assert content[0]["type"] == "image"
+
+    def test_rejects_unknown_file_type(self):
+        from anthropic_handlers.tools._lib import messages as msg_lib
+
+        with pytest.raises(ValueError, match="file_type"):
+            msg_lib.create_message_with_file(
+                prompt="hi", file_ids=["file_a"], file_type="audio",
+            )
+
+    def test_empty_file_ids_raises(self):
+        from anthropic_handlers.tools._lib import messages as msg_lib
+
+        with pytest.raises(ValueError, match="file_ids"):
+            msg_lib.create_message_with_file(prompt="hi", file_ids=[])
+
+    def test_handler_parses_comma_separated_ids(self):
+        from anthropic_handlers.handlers.messages import messages_handlers as mh
+        from anthropic_handlers.tools._lib import messages as msg_lib
+
+        client = _file_message_mock_client(reply_text="seen 3 files")
+        with patch.object(msg_lib, "get_client", return_value=client):
+            out = mh._create_message_with_file_handler({
+                "prompt": "describe these",
+                "file_ids": "file_a, file_b ,file_c",
+                "file_type": "document",
+            })
+        assert out["result"]["text"] == "seen 3 files"
+        assert out["result"]["file_count"] == 3
+        content = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        ids = [b["source"]["file_id"] for b in content if b["type"] != "text"]
+        assert ids == ["file_a", "file_b", "file_c"]
+
+    def test_handler_rejects_missing_file_ids(self):
+        from anthropic_handlers.handlers.messages import messages_handlers as mh
+
+        with pytest.raises(ValueError, match="file_ids"):
+            mh._create_message_with_file_handler({"prompt": "hi", "file_ids": "  ,  "})
+
+    def test_dispatch_routes_create_message_with_file(self):
+        from anthropic_handlers.handlers.messages import messages_handlers as mh
+
+        assert "anthropic.messages.CreateMessageWithFile" in mh._DISPATCH

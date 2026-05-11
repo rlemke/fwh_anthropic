@@ -52,4 +52,26 @@ namespace anthropic.batch {
      */
     event facet GetBatchResults(
         batch_id: String) => (result: BatchResults)
+
+    /**
+     * Convenience: submit a batch, poll until ended, and pull results
+     * in one workflow step. `poll_interval_seconds` and
+     * `timeout_seconds` set the polling cadence and overall budget.
+     * Use this when you don't need to drive the polling cadence
+     * yourself; for fine-grained control, compose SubmitBatch +
+     * GetBatchStatus + GetBatchResults in your own loop.
+     */
+    schema RunBatchResult {
+        batch_id: String,
+        processing_status: String,
+        poll_count: Long,
+        elapsed_seconds: Double,
+        result_count: Long,
+        results_json: String
+    }
+
+    event facet RunBatch(
+        requests_json: String,
+        poll_interval_seconds: Double = 10.0,
+        timeout_seconds: Double = 600.0) => (result: RunBatchResult)
 }

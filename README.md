@@ -44,8 +44,9 @@ scripts/seed-examples --include anthropic
 scripts/start-runner --example anthropic -- --log-format text
 ```
 
-At the current scaffolding stage, the runner reports
-`anthropic: 0 handlers registered  [entry_point]` — that's expected.
+All 6 areas are wired today (16 facets total — `messages` 6, `batch`
+4, `files` 3, `agent_sdk` 1, `claude_code` 1, `computer_use` 1) plus
+one cross-area composition workflow (`anthropic.compose.DocumentQA`).
 
 ## Inspect what areas are wired
 
@@ -55,6 +56,17 @@ src/anthropic_handlers/tools/list-areas.sh
 
 Prints a table of every area subpackage and how many handlers it
 currently exposes.
+
+## Live tests (opt-in)
+
+The unit suite mocks all SDK calls. To smoke-test against the real
+Anthropic API:
+
+```bash
+ANTHROPIC_API_KEY=sk-... pytest tests/live -m live --run-live
+```
+
+See `tests/live/README.md` for the full gating contract.
 
 ## Layout
 

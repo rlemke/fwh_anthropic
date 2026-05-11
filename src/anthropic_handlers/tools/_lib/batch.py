@@ -8,16 +8,18 @@ returns immediately with a ``batch_id``; results stream back when the
 batch completes (or hits its 24-hour cap).
 
 This area exposes the three primitives so callers can compose their
-own polling cadence:
+own polling cadence, plus a convenience driver that handles the loop:
 
 - :func:`submit_batch`      — submit a list of message requests
 - :func:`get_batch_status`  — check completion status / per-state counts
 - :func:`get_batch_results` — pull results once the batch ends
+- :func:`run_batch`         — submit + poll + retrieve in one call
 """
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+import time
+from typing import Any, Callable, Iterable
 
 from .client import get_client
 
@@ -151,3 +153,79 @@ def _result_to_dict(result: Any) -> dict[str, Any]:
     elif rtype in ("canceled", "expired"):
         out["note"] = rtype
     return out
+
+
+# ---------------------------------------------------------------------------
+# Convenience driver
+# ---------------------------------------------------------------------------
+
+
+def run_batch(
+    *,
+    requests: list[dict[str, Any]],
+    poll_interval_seconds: float = 10.0,
+    timeout_seconds: float = 600.0,
+    on_status: Callable[[dict[str, Any]], None] | None = None,
+    sleep_fn: Callable[[float], None] | None = None,
+) -> dict[str, Any]:
+    """Submit + poll + retrieve a batch in one call.
+
+    Submits *requests*, polls :func:`get_batch_status` every
+    *poll_interval_seconds*, and once the batch reaches a terminal
+    state (``processing_status == "ended"``) calls
+    :func:`get_batch_results` and returns the aggregated payload:
+
+        {
+            "batch": <metadata dict from get_batch_status>,
+            "poll_count": <int>,
+            "elapsed_seconds": <float>,
+            "results": [<per-request dicts>],
+        }
+
+    *on_status* is an optional callback invoked on every poll with
+    the current batch metadata (great for surfacing progress to the
+    FFL step log). *sleep_fn* defaults to :func:`time.sleep` but can
+    be patched out in tests.
+
+    Raises :class:`TimeoutError` if the batch doesn't end within
+    *timeout_seconds*. The submitted batch keeps running on
+    Anthropic's side after the timeout — call
+    :func:`get_batch_status` / :func:`get_batch_results` directly to
+    pick up where the loop left off.
+    """
+    if poll_interval_seconds <= 0:
+        raise ValueError("poll_interval_seconds must be positive")
+    if timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+
+    sleep = sleep_fn or time.sleep
+    submitted = submit_batch(requests=requests)
+    batch_id = submitted["id"]
+    if on_status is not None:
+        on_status(submitted)
+
+    start = time.monotonic()
+    poll_count = 0
+    status = submitted
+    while status.get("processing_status") != "ended":
+        elapsed = time.monotonic() - start
+        if elapsed >= timeout_seconds:
+            raise TimeoutError(
+                f"run_batch hit timeout_seconds={timeout_seconds} waiting on "
+                f"batch {batch_id!r} (last status={status.get('processing_status')!r}). "
+                f"Use get_batch_status / get_batch_results to pick up where the "
+                f"loop left off — the batch keeps running on Anthropic's side."
+            )
+        sleep(poll_interval_seconds)
+        poll_count += 1
+        status = get_batch_status(batch_id=batch_id)
+        if on_status is not None:
+            on_status(status)
+
+    results = get_batch_results(batch_id=batch_id)
+    return {
+        "batch": status,
+        "poll_count": poll_count,
+        "elapsed_seconds": round(time.monotonic() - start, 3),
+        "results": results["results"],
+    }

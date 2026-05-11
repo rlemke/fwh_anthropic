@@ -8,6 +8,7 @@ Public surface:
 - :func:`count_tokens`               — ``messages.count_tokens`` for a prepared request
 - :func:`create_message_with_tools`  — single round with tool definitions; returns text + tool_use blocks + full message history so callers can drive multi-turn loops themselves
 - :func:`create_message_with_images` — vision: send one or more images (URLs or local files) alongside the prompt
+- :func:`create_message_with_file`   — RAG: reference uploaded Files-API ``file_id``s as document or image content blocks (cross-area composition with :mod:`anthropic_handlers.tools._lib.files`)
 - :func:`stream_message`             — streaming Messages call; same return shape as ``create_message`` plus a caller-supplied ``on_chunk`` callback for progressive output
 - :func:`run_tool_use_loop`          — Python-side convenience: full multi-turn tool loop with caller-supplied tool implementations (dict of name → callable)
 
@@ -509,4 +510,91 @@ def stream_message(
         "stop_reason": getattr(final, "stop_reason", ""),
         "chunk_count": len(chunks),
         **_usage_fields(final),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Cross-area composition: Messages + Files API
+# ---------------------------------------------------------------------------
+
+
+def _file_content_block(file_id: str, file_type: str) -> dict[str, Any]:
+    """Build a Messages content block referencing an uploaded Files-API file.
+
+    ``file_type`` is ``"document"`` (PDFs, text files — most common for RAG)
+    or ``"image"`` (PNG/JPEG/etc.). The shape matches the Anthropic SDK's
+    content-block schema with ``source.type = "file"``.
+    """
+    if file_type not in ("document", "image"):
+        raise ValueError(
+            f"file_type must be 'document' or 'image', got {file_type!r}"
+        )
+    return {
+        "type": file_type,
+        "source": {"type": "file", "file_id": file_id},
+    }
+
+
+def create_message_with_file(
+    *,
+    prompt: str,
+    file_ids: list[str],
+    file_type: str = "document",
+    system: str = "",
+    model: str | None = None,
+    max_tokens: int = 1024,
+    temperature: float = 1.0,
+    cache_system: bool = False,
+) -> dict[str, Any]:
+    """Messages call where the user content references uploaded Files-API files.
+
+    The standard RAG pattern: upload a document via the Files API (see
+    :func:`anthropic_handlers.tools._lib.files.upload_file`), get back
+    a ``file_id``, then call this function with the file_id and a
+    question about the document.
+
+    *file_type* is ``"document"`` (PDFs, text files — default) or
+    ``"image"`` (PNG/JPEG/etc.). All files in a single call use the
+    same type; mix types by composing multiple calls.
+
+    Returns the same shape as :func:`create_message` plus a
+    ``file_count`` field.
+    """
+    if not prompt:
+        raise ValueError("prompt must not be empty")
+    if not file_ids:
+        raise ValueError(
+            "file_ids must not be empty — use create_message() for prompts "
+            "without file references"
+        )
+    if cache_system and not system:
+        raise ValueError("cache_system=True requires a non-empty system prompt")
+
+    content: list[dict[str, Any]] = [
+        _file_content_block(fid, file_type) for fid in file_ids
+    ]
+    # Text follows files — same convention as vision blocks.
+    content.append({"type": "text", "text": prompt})
+
+    client = get_client()
+    model_id = model or DEFAULT_MODEL
+    kwargs: dict[str, Any] = {
+        "model": model_id,
+        "max_tokens": int(max_tokens),
+        "messages": [{"role": "user", "content": content}],
+        "temperature": float(temperature),
+    }
+    if system:
+        kwargs["system"] = _system_param(system, cache=cache_system)
+
+    response = client.messages.create(**kwargs)
+    text = "".join(
+        getattr(b, "text", "") for b in response.content if getattr(b, "type", "") == "text"
+    )
+    return {
+        "text": text,
+        "model": getattr(response, "model", model_id),
+        "stop_reason": getattr(response, "stop_reason", ""),
+        "file_count": len(file_ids),
+        **_usage_fields(response),
     }

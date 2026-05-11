@@ -169,4 +169,35 @@ namespace anthropic.messages {
         model: String = "",
         max_tokens: Long = 1024,
         cache_system: Boolean = false) => (result: StreamResult)
+
+    /** Result of a Messages call that references uploaded Files-API files. */
+    schema FileMessageResult {
+        text: String,
+        model: String,
+        stop_reason: String,
+        file_count: Long,
+        input_tokens: Long,
+        output_tokens: Long,
+        cache_creation_input_tokens: Long,
+        cache_read_input_tokens: Long
+    }
+
+    /**
+     * Single-turn Messages call that references uploaded Files-API
+     * files as document or image content blocks — the RAG pattern.
+     * Upload a PDF via `anthropic.files.UploadFile`, take its `id`,
+     * and ask Claude questions about it here.
+     *
+     * `file_ids` is a comma-separated list of Anthropic file IDs.
+     * `file_type` is `document` (PDFs, text — default) or `image`
+     * (PNG/JPEG). All files in a single call share the same type.
+     */
+    event facet CreateMessageWithFile(
+        prompt: String,
+        file_ids: String,
+        file_type: String = "document",
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024,
+        cache_system: Boolean = false) => (result: FileMessageResult)
 }

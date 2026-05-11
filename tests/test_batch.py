@@ -208,8 +208,171 @@ class TestBatchHandlers:
     def test_dispatch_keys(self):
         from anthropic_handlers.handlers.batch import batch_handlers as bh
 
-        assert set(bh._DISPATCH.keys()) == {
+        assert {
             "anthropic.batch.SubmitBatch",
             "anthropic.batch.GetBatchStatus",
             "anthropic.batch.GetBatchResults",
-        }
+            "anthropic.batch.RunBatch",
+        } <= set(bh._DISPATCH.keys())
+
+
+# ---------------------------------------------------------------------------
+# run_batch — submit + poll + retrieve convenience driver
+# ---------------------------------------------------------------------------
+
+
+class TestRunBatch:
+    def _client_for_lifecycle(self, *, statuses, results):
+        """Build a client whose retrieve() walks the supplied status list."""
+        batches_api = MagicMock()
+        # submit_batch calls .create — first response is the initial submit.
+        batches_api.create.return_value = statuses[0]
+        # Each retrieve() pops the next status off the queue.
+        queue = list(statuses[1:])
+
+        def _retrieve(_id: str):
+            if not queue:
+                raise AssertionError("retrieve called more times than expected")
+            return queue.pop(0)
+
+        batches_api.retrieve = MagicMock(side_effect=_retrieve)
+        batches_api.results = MagicMock(return_value=iter(results))
+        return _mock_client(batches=batches_api), batches_api
+
+    def test_polls_until_ended_and_returns_results(self):
+        from anthropic_handlers.tools._lib import batch as batch_lib
+
+        client, batches_api = self._client_for_lifecycle(
+            statuses=[
+                _batch(id="msgbatch_abc", processing_status="in_progress",
+                       counts=_counts(processing=2)),
+                _batch(id="msgbatch_abc", processing_status="in_progress",
+                       counts=_counts(processing=1, succeeded=1)),
+                _batch(id="msgbatch_abc", processing_status="ended",
+                       counts=_counts(succeeded=2), ended_at="2026-05-11T01:00:00Z"),
+            ],
+            results=[
+                _result_succeeded(custom_id="r1", text="answer 1"),
+                _result_succeeded(custom_id="r2", text="answer 2"),
+            ],
+        )
+        sleep_calls: list[float] = []
+        status_calls: list[str] = []
+        with patch.object(batch_lib, "get_client", return_value=client):
+            out = batch_lib.run_batch(
+                requests=[
+                    {"custom_id": "r1", "params": {"model": "m", "max_tokens": 10,
+                                                    "messages": [{"role": "user", "content": "hi"}]}},
+                    {"custom_id": "r2", "params": {"model": "m", "max_tokens": 10,
+                                                    "messages": [{"role": "user", "content": "hi"}]}},
+                ],
+                poll_interval_seconds=0.1,
+                timeout_seconds=10.0,
+                sleep_fn=sleep_calls.append,
+                on_status=lambda meta: status_calls.append(meta["processing_status"]),
+            )
+
+        assert out["batch"]["processing_status"] == "ended"
+        assert out["poll_count"] == 2
+        assert len(out["results"]) == 2
+        assert out["results"][0]["text"] == "answer 1"
+        # sleep_fn was called once per poll, with the requested interval.
+        assert sleep_calls == [0.1, 0.1]
+        # on_status fires once on submit + once per poll.
+        assert status_calls == ["in_progress", "in_progress", "ended"]
+
+    def test_skips_polling_when_already_ended(self):
+        """A batch that ends on submit must not call retrieve at all."""
+        from anthropic_handlers.tools._lib import batch as batch_lib
+
+        batches_api = MagicMock()
+        batches_api.create.return_value = _batch(
+            id="msgbatch_inst",
+            processing_status="ended",
+            counts=_counts(succeeded=1),
+            ended_at="2026-05-11T00:00:01Z",
+        )
+        batches_api.results.return_value = iter([
+            _result_succeeded(custom_id="r1", text="instant"),
+        ])
+        client = _mock_client(batches=batches_api)
+        with patch.object(batch_lib, "get_client", return_value=client):
+            out = batch_lib.run_batch(
+                requests=[{"custom_id": "r1", "params": {"model": "m",
+                            "max_tokens": 10, "messages": [{"role": "user", "content": "hi"}]}}],
+                poll_interval_seconds=0.1,
+                sleep_fn=lambda _: None,
+            )
+        assert out["poll_count"] == 0
+        batches_api.retrieve.assert_not_called()
+        assert out["results"][0]["text"] == "instant"
+
+    def test_timeout_raises_with_actionable_message(self):
+        from anthropic_handlers.tools._lib import batch as batch_lib
+
+        # Submit returns in_progress, retrieve keeps returning in_progress.
+        batches_api = MagicMock()
+        batches_api.create.return_value = _batch(
+            id="msgbatch_slow", processing_status="in_progress",
+            counts=_counts(processing=5),
+        )
+        batches_api.retrieve.return_value = _batch(
+            id="msgbatch_slow", processing_status="in_progress",
+            counts=_counts(processing=5),
+        )
+        client = _mock_client(batches=batches_api)
+        # Use a fake clock so the test doesn't actually wait.
+        import time as time_mod
+        tick = [0.0]
+
+        def _fake_sleep(seconds: float) -> None:
+            tick[0] += seconds
+
+        with patch.object(batch_lib, "get_client", return_value=client), \
+             patch.object(batch_lib.time, "monotonic", side_effect=lambda: tick[0]):
+            with pytest.raises(TimeoutError, match="timeout_seconds"):
+                batch_lib.run_batch(
+                    requests=[{"custom_id": "r1", "params": {"model": "m",
+                                "max_tokens": 10, "messages": [{"role": "user", "content": "hi"}]}}],
+                    poll_interval_seconds=1.0,
+                    timeout_seconds=2.0,
+                    sleep_fn=_fake_sleep,
+                )
+
+    def test_handler_decodes_and_returns_results_json(self):
+        from anthropic_handlers.handlers.batch import batch_handlers as bh
+        from anthropic_handlers.tools._lib import batch as batch_lib
+
+        # Submit then retrieve both return "ended" → no polling.
+        batches_api = MagicMock()
+        batches_api.create.return_value = _batch(
+            id="msgbatch_h", processing_status="ended",
+            counts=_counts(succeeded=1),
+        )
+        batches_api.results.return_value = iter([
+            _result_succeeded(custom_id="r1", text="handler ok"),
+        ])
+        client = _mock_client(batches=batches_api)
+        # Replace time.sleep so no real wait occurs.
+        with patch.object(batch_lib, "get_client", return_value=client), \
+             patch.object(batch_lib.time, "sleep", lambda _s: None):
+            out = bh._run_batch_handler({
+                "requests_json": json.dumps([
+                    {"custom_id": "r1", "params": {"model": "m", "max_tokens": 10,
+                                                    "messages": [{"role": "user", "content": "hi"}]}},
+                ]),
+                "poll_interval_seconds": 0.01,
+                "timeout_seconds": 1.0,
+            })
+        assert out["result"]["batch_id"] == "msgbatch_h"
+        assert out["result"]["processing_status"] == "ended"
+        assert out["result"]["result_count"] == 1
+        decoded = json.loads(out["result"]["results_json"])
+        assert decoded[0]["custom_id"] == "r1"
+        assert decoded[0]["text"] == "handler ok"
+
+    def test_handler_requires_requests_json(self):
+        from anthropic_handlers.handlers.batch import batch_handlers as bh
+
+        with pytest.raises(ValueError, match="requests_json"):
+            bh._run_batch_handler({})

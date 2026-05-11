@@ -1,0 +1,63 @@
+/**
+ * Cross-area composition workflows.
+ *
+ * Each workflow here chains facets from multiple per-area namespaces
+ * to demonstrate end-to-end use of the package — and to surface any
+ * rough edges in the JSON-bridge fields that connect the areas.
+ *
+ * Per-area declarations live in their own files (messages.ffl,
+ * batch.ffl, files.ffl, …). This file is composition only — no new
+ * event facets here.
+ */
+namespace anthropic.compose {
+
+    /** Final answer + intermediate IDs for a single document QA pass. */
+    schema DocumentQAResult {
+        file_id: String,
+        text: String,
+        input_tokens: Long,
+        output_tokens: Long,
+        stop_reason: String
+    }
+
+    /**
+     * DocumentQA: upload a local document, then ask Claude a single
+     * question about it using the Files-API reference.
+     *
+     * Demonstrates the canonical RAG pattern:
+     *   anthropic.files.UploadFile  →  anthropic.messages.CreateMessageWithFile
+     *
+     * For multi-question loops, run this workflow once per question
+     * (the file_id is reusable) — or hold the upload outside the
+     * workflow and call CreateMessageWithFile directly.
+     */
+    workflow DocumentQA(
+        path: String,
+        question: String,
+        system: String = "",
+        model: String = "",
+        max_tokens: Long = 1024) => (
+            file_id: String,
+            text: String,
+            input_tokens: Long,
+            output_tokens: Long,
+            stop_reason: String) andThen {
+
+        uploaded = anthropic.files.UploadFile(path = $.path)
+
+        answer = anthropic.messages.CreateMessageWithFile(
+            prompt = $.question,
+            file_ids = uploaded.result.id,
+            file_type = "document",
+            system = $.system,
+            model = $.model,
+            max_tokens = $.max_tokens)
+
+        yield DocumentQA(
+            file_id = uploaded.result.id,
+            text = answer.result.text,
+            input_tokens = answer.result.input_tokens,
+            output_tokens = answer.result.output_tokens,
+            stop_reason = answer.result.stop_reason)
+    }
+}

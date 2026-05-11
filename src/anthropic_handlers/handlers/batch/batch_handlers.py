@@ -17,6 +17,7 @@ from typing import Any
 from ..shared.anthropic_utils import (
     get_batch_results,
     get_batch_status,
+    run_batch,
     submit_batch,
 )
 
@@ -83,10 +84,57 @@ def _flatten_batch(batch: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _run_batch_handler(payload: dict) -> dict[str, Any]:
+    requests_json = payload.get("requests_json", "")
+    if not requests_json:
+        raise ValueError("RunBatch requires requests_json")
+    requests = json.loads(requests_json)
+    if not isinstance(requests, list):
+        raise ValueError("requests_json must decode to a JSON list")
+    poll_interval_seconds = float(payload.get("poll_interval_seconds", 10.0))
+    timeout_seconds = float(payload.get("timeout_seconds", 600.0))
+
+    step_log = payload.get("_step_log")
+    if step_log:
+        step_log(
+            f"RunBatch: {len(requests)} requests "
+            f"poll={poll_interval_seconds}s timeout={timeout_seconds}s"
+        )
+
+    def _on_status(meta: dict[str, Any]) -> None:
+        if step_log:
+            counts = meta.get("request_counts") or {}
+            step_log(
+                f"batch {meta.get('id', '?')} status={meta.get('processing_status', '?')} "
+                f"succeeded={counts.get('succeeded', 0)} "
+                f"errored={counts.get('errored', 0)} "
+                f"processing={counts.get('processing', 0)}"
+            )
+
+    out = run_batch(
+        requests=requests,
+        poll_interval_seconds=poll_interval_seconds,
+        timeout_seconds=timeout_seconds,
+        on_status=_on_status,
+    )
+    batch_meta = out["batch"]
+    return {
+        "result": {
+            "batch_id": batch_meta.get("id", ""),
+            "processing_status": batch_meta.get("processing_status", ""),
+            "poll_count": int(out["poll_count"]),
+            "elapsed_seconds": float(out["elapsed_seconds"]),
+            "result_count": len(out["results"]),
+            "results_json": json.dumps(out["results"], default=str),
+        }
+    }
+
+
 _DISPATCH: dict[str, Any] = {
     f"{NAMESPACE}.SubmitBatch": _submit_batch_handler,
     f"{NAMESPACE}.GetBatchStatus": _get_batch_status_handler,
     f"{NAMESPACE}.GetBatchResults": _get_batch_results_handler,
+    f"{NAMESPACE}.RunBatch": _run_batch_handler,
 }
 
 
