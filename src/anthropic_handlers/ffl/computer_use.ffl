@@ -1,18 +1,59 @@
 /**
- * ComputerUse integration namespace.
+ * Computer Use beta namespace.
  *
- * Wraps the Computer Use beta.
- * Reference: https://github.com/anthropics/anthropic-quickstarts
+ * Wraps Anthropic's Computer Use beta — Claude controls a virtual
+ * desktop via screen-control + bash + text-editor tools.
  *
- * Status: scaffolded. Event facets and workflows will be added here as
- * the area is wired up. See agent-spec/integration-areas.agent-spec.yaml
- * for the contract.
+ * **The FFL facet here runs in SIMULATOR MODE.** Tool implementations
+ * are deterministic stubs that return placeholder results so the
+ * loop terminates and prompt engineering is reproducible. They do
+ * NOT control a real screen.
+ *
+ * For real screen control, drive
+ * `anthropic_handlers.tools._lib.computer_use.run_computer_use`
+ * directly from Python and supply your own `tool_impls` (xdotool,
+ * pyautogui, Docker VM controller, etc.). Anthropic's reference
+ * Docker implementation lives at
+ * https://github.com/anthropics/anthropic-quickstarts.
+ *
+ * Reference: https://docs.anthropic.com/en/docs/build-with-claude/computer-use
  */
 namespace anthropic.computer {
 
-    /** Placeholder schema so the scaffolded namespace declaration parses cleanly. */
-    schema ComputerUsePlaceholder {
-        status: String
+    /** Result of a Computer Use session (simulator or real). */
+    schema ComputerUseResult {
+        text: String,
+        iterations: Long,
+        stop_reason: String,
+        trace_json: String,
+        input_tokens: Long,
+        output_tokens: Long,
+        mode: String
     }
 
+    /**
+     * Run a Computer Use session in simulator mode. Useful for
+     * prompt-engineering dry runs and for verifying that the
+     * runner / dispatcher pipeline works end-to-end without
+     * standing up a real VM.
+     *
+     * `display_width_px` / `display_height_px` are passed through
+     * to the computer tool definition so the model sizes its
+     * coordinates correctly. `display_number` is the X display index
+     * (defaults to 1).
+     *
+     * `enable_bash` / `enable_text_editor` toggle the
+     * bash_20241022 and text_editor_20241022 tools alongside the
+     * primary `computer_20241022` tool.
+     */
+    event facet RunComputerUseSession(
+        task: String,
+        system: String = "",
+        model: String = "",
+        max_iterations: Long = 20,
+        display_width_px: Long = 1024,
+        display_height_px: Long = 768,
+        display_number: Long = 1,
+        enable_bash: Boolean = true,
+        enable_text_editor: Boolean = true) => (result: ComputerUseResult)
 }

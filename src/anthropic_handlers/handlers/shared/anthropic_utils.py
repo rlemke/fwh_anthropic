@@ -60,6 +60,13 @@ from anthropic_handlers.tools._lib.files import (  # noqa: F401
     upload_file,
 )
 
+# --- computer_use area -------------------------------------------------------
+from anthropic_handlers.tools._lib.computer_use import (  # noqa: F401
+    default_tools,
+    run_computer_use,
+    simulator_tool_impls,
+)
+
 __all__ = [
     # Shared SDK client + helpers
     "client",
@@ -92,4 +99,8 @@ __all__ = [
     "delete_file",
     "list_files",
     "upload_file",
+    # Computer Use public surface
+    "default_tools",
+    "run_computer_use",
+    "simulator_tool_impls",
 ]
