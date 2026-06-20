@@ -8,11 +8,11 @@ subpackage under ``handlers/`` and ``tools/_lib/``. Areas can grow
 independently — adding a new one is purely additive (no need to touch
 existing areas' code).
 
-Discovered by the Facetwork runner via the ``facetwork.examples`` entry
+Discovered by the Facetwork runner via the ``facetwork.domains`` entry
 point declared in ``pyproject.toml``::
 
-    [project.entry-points."facetwork.examples"]
-    anthropic = "anthropic_handlers:example"
+    [project.entry-points."facetwork.domains"]
+    anthropic = "anthropic_handlers:domain"
 
 Once ``pip install -e .`` has been run from this repository, Facetwork's
 ``scripts/start-runner --example anthropic`` and ``scripts/seed-examples``
@@ -28,11 +28,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from facetwork.examples import ExamplePackage
+from facetwork.domains import DomainPackage
 
 from .handlers import register_all_registry_handlers
 
-example = ExamplePackage(
+domain = DomainPackage(
     name="anthropic",
     ffl_dir=Path(__file__).parent / "ffl",
     register_handlers=register_all_registry_handlers,

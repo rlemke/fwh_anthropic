@@ -35,8 +35,8 @@ mcp = ["mcp>=0.9"]
 Repository = "https://github.com/rlemke/fwh_anthropic"
 Anthropic = "https://github.com/anthropics"
 
-[project.entry-points."facetwork.examples"]
-anthropic = "anthropic_handlers:example"
+[project.entry-points."facetwork.domains"]
+anthropic = "anthropic_handlers:domain"
 
 [tool.setuptools.packages.find]
 where = ["src"]
