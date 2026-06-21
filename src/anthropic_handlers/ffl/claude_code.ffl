@@ -40,5 +40,5 @@ namespace anthropic.code {
         allowed_tools: String = "",
         model: String = "",
         permission_mode: String = "",
-        timeout_seconds: Long = 600) => (result: ClaudeCodeResult)
+        timeout_seconds: Long = 600) => (result: ClaudeCodeResult) with Effect(kind = "external") with Cost(tier = "expensive")
 }

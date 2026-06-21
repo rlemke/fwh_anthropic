@@ -1,0 +1,198 @@
+# Composability manifest for the fwh-anthropic package.
+#
+# Machine-readable index so an LLM can DISCOVER + REUSE these capabilities by
+# intent, the same way the platform's `fw_catalog_match` (workflow-level,
+# reuse-first) and `fw_capabilities` (facet-level capability index) tools work.
+#
+#   * `workflows` — entry-point workflows, each with a natural-language `summary`
+#     (the kind of request it answers), `tags`, and a `param_schema` of the key
+#     parameters. Use these for reuse-first catalog matching: match an NL request
+#     against the summaries/tags before authoring anything new.
+#   * `facets` — a capability index of the core composable primitives by
+#     namespace, with `purpose`, `signature`, and the `effect`/`cost` taken
+#     verbatim from the `with Effect(...) / with Cost(...)` mixins in the FFL.
+#
+# Almost every facet here wraps a network call to the Anthropic / Claude API
+# (effect: external). Cost is tiered by token spend + latency: a single
+# inference Message is `moderate`; a no-inference accounting/metadata call
+# (CountTokens, Files, batch submit/status/results) is `cheap`; a long agentic
+# loop or whole batch run (Agent SDK, Claude Code CLI, Computer Use, RunBatch)
+# is `expensive`. Accurate qualified names + signatures are sourced from the
+# .ffl; see `anthropic_handlers.catalog.load_manifest()`.
+
+version: 1
+package: fwh-anthropic
+
+workflows:
+  # --- Composition (cross-area RAG) ------------------------------------------
+  - qualified_name: anthropic.compose.DocumentQA
+    summary: >-
+      Upload a local document (PDF/text) to the Files API, then ask Claude a
+      single question about it via a Files-referenced Messages call. The
+      canonical RAG pattern for "answer a question about this document/PDF".
+    tags: [rag, document-qa, files, messages, pdf, question-answering]
+    entry_point: true
+    param_schema:
+      path: String
+      question: String
+      system: String
+      model: String
+      max_tokens: Long
+
+  # --- Messages (token-budget + generate) ------------------------------------
+  - qualified_name: anthropic.messages.ChatOnce
+    summary: >-
+      Count input tokens for a prompt, then generate Claude's reply in one step.
+      The input-budget-then-generate pattern for a single-turn chat / completion.
+    tags: [messages, chat, completion, token-count, single-turn]
+    entry_point: true
+    param_schema:
+      prompt: String
+      system: String
+      model: String
+      max_tokens: Long
+
+facets:
+  # --- anthropic.messages : Messages API -------------------------------------
+  - qualified_name: anthropic.messages.CreateMessage
+    namespace: anthropic.messages
+    purpose: >-
+      Single-turn Messages call — send one user prompt (optional system prompt)
+      and return Claude's text plus usage and stop reason.
+    signature: "CreateMessage(prompt: String, system: String = \"\", model: String = \"\", max_tokens: Long = 1024, cache_system: Boolean = false) => (result: MessageResult)"
+    effect: external
+    cost: moderate
+
+  - qualified_name: anthropic.messages.CountTokens
+    namespace: anthropic.messages
+    purpose: >-
+      Count input tokens for a prepared request before sending it — one
+      accounting round-trip, no inference.
+    signature: "CountTokens(prompt: String, system: String = \"\", model: String = \"\") => (count: TokenCount)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.messages.CreateMessageWithTools
+    namespace: anthropic.messages
+    purpose: >-
+      One round of a tool-use conversation: pass tool definitions + history,
+      return the tool_use blocks Claude requested for the caller to execute.
+    signature: "CreateMessageWithTools(prompt: String = \"\", tools_json: String, messages_json: String = \"\", system: String = \"\", model: String = \"\", max_tokens: Long = 1024, cache_system: Boolean = false) => (result: ToolUseResult)"
+    effect: external
+    cost: moderate
+
+  - qualified_name: anthropic.messages.CreateMessageWithImages
+    namespace: anthropic.messages
+    purpose: >-
+      Single-turn vision call — send a prompt with one or more images (by URL
+      and/or local path) and return Claude's text.
+    signature: "CreateMessageWithImages(prompt: String, image_urls: String = \"\", image_paths: String = \"\", system: String = \"\", model: String = \"\", max_tokens: Long = 1024, cache_system: Boolean = false) => (result: VisionResult)"
+    effect: external
+    cost: moderate
+
+  - qualified_name: anthropic.messages.CreateMessageStream
+    namespace: anthropic.messages
+    purpose: >-
+      Streaming Messages call — consume the SSE stream server-side, emit text
+      deltas to the step log for progressive output, return the assembled text.
+    signature: "CreateMessageStream(prompt: String, system: String = \"\", model: String = \"\", max_tokens: Long = 1024, cache_system: Boolean = false) => (result: StreamResult)"
+    effect: external
+    cost: moderate
+
+  - qualified_name: anthropic.messages.CreateMessageWithFile
+    namespace: anthropic.messages
+    purpose: >-
+      Single-turn Messages call referencing uploaded Files-API files as document
+      or image content blocks — the RAG building block.
+    signature: "CreateMessageWithFile(prompt: String, file_ids: String, file_type: String = \"document\", system: String = \"\", model: String = \"\", max_tokens: Long = 1024, cache_system: Boolean = false) => (result: FileMessageResult)"
+    effect: external
+    cost: moderate
+
+  # --- anthropic.files : Files API -------------------------------------------
+  - qualified_name: anthropic.files.UploadFile
+    namespace: anthropic.files
+    purpose: >-
+      Upload a local file to the Files API so later Messages calls can reference
+      it by id instead of re-uploading inline.
+    signature: "UploadFile(path: String, mime_type: String = \"\") => (result: FileMetadata)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.files.ListFiles
+    namespace: anthropic.files
+    purpose: List uploaded files (most-recent-first).
+    signature: "ListFiles(limit: Long = 50) => (result: FileListing)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.files.DeleteFile
+    namespace: anthropic.files
+    purpose: Delete a previously-uploaded file by id.
+    signature: "DeleteFile(file_id: String) => (result: FileDeletion)"
+    effect: external
+    cost: cheap
+
+  # --- anthropic.batch : Message Batches API ---------------------------------
+  - qualified_name: anthropic.batch.SubmitBatch
+    namespace: anthropic.batch
+    purpose: >-
+      Submit a batch of Messages requests (≈50% cheaper, 24h SLA). Returns batch
+      metadata immediately; does not wait for completion.
+    signature: "SubmitBatch(requests_json: String) => (result: BatchMetadata)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.batch.GetBatchStatus
+    namespace: anthropic.batch
+    purpose: Check current processing status of a batch; does NOT block on completion.
+    signature: "GetBatchStatus(batch_id: String) => (result: BatchMetadata)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.batch.GetBatchResults
+    namespace: anthropic.batch
+    purpose: Pull the per-request results for an ended batch.
+    signature: "GetBatchResults(batch_id: String) => (result: BatchResults)"
+    effect: external
+    cost: cheap
+
+  - qualified_name: anthropic.batch.RunBatch
+    namespace: anthropic.batch
+    purpose: >-
+      Submit a batch, poll until ended, and pull results in one step — runs the
+      whole batch of inference within a polling budget.
+    signature: "RunBatch(requests_json: String, poll_interval_seconds: Double = 10.0, timeout_seconds: Double = 600.0) => (result: RunBatchResult)"
+    effect: external
+    cost: expensive
+
+  # --- anthropic.agent : Claude Agent SDK ------------------------------------
+  - qualified_name: anthropic.agent.RunAgent
+    namespace: anthropic.agent
+    purpose: >-
+      Run the Claude Agent SDK against a single prompt to completion (planning,
+      tool use, memory) — a multi-turn autonomous agent run.
+    signature: "RunAgent(prompt: String, system: String = \"\", model: String = \"\", max_turns: Long = 10, allowed_tools: String = \"\", permission_mode: String = \"default\") => (result: AgentResult)"
+    effect: external
+    cost: expensive
+
+  # --- anthropic.code : Claude Code CLI orchestration ------------------------
+  - qualified_name: anthropic.code.RunClaudeCode
+    namespace: anthropic.code
+    purpose: >-
+      Run the `claude` CLI non-interactively as a subprocess (a full agentic
+      coding run) and capture stdout/stderr/exit code — for fan-out batch
+      refactors/audits across directories.
+    signature: "RunClaudeCode(prompt: String, working_dir: String = \"\", allowed_tools: String = \"\", model: String = \"\", permission_mode: String = \"\", timeout_seconds: Long = 600) => (result: ClaudeCodeResult)"
+    effect: external
+    cost: expensive
+
+  # --- anthropic.computer : Computer Use beta --------------------------------
+  - qualified_name: anthropic.computer.RunComputerUseSession
+    namespace: anthropic.computer
+    purpose: >-
+      Run a Computer Use session (simulator-mode tools) — Claude drives an
+      agentic screen-control/bash/text-editor loop over many inference
+      iterations. Tool impls are deterministic stubs; the model loop is live.
+    signature: "RunComputerUseSession(task: String, system: String = \"\", model: String = \"\", max_iterations: Long = 20, display_width_px: Long = 1024, display_height_px: Long = 768, display_number: Long = 1, enable_bash: Boolean = true, enable_text_editor: Boolean = true) => (result: ComputerUseResult)"
+    effect: external
+    cost: expensive

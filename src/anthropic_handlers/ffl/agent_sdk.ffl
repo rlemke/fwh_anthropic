@@ -47,5 +47,5 @@ namespace anthropic.agent {
         model: String = "",
         max_turns: Long = 10,
         allowed_tools: String = "",
-        permission_mode: String = "default") => (result: AgentResult)
+        permission_mode: String = "default") => (result: AgentResult) with Effect(kind = "external") with Cost(tier = "expensive")
 }

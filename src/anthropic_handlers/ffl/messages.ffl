@@ -36,7 +36,7 @@ namespace anthropic.messages {
         system: String = "",
         model: String = "",
         max_tokens: Long = 1024,
-        cache_system: Boolean = false) => (result: MessageResult)
+        cache_system: Boolean = false) => (result: MessageResult) with Effect(kind = "external") with Cost(tier = "moderate")
 
     /**
      * Count input tokens for a prepared request before sending it.
@@ -45,7 +45,7 @@ namespace anthropic.messages {
     event facet CountTokens(
         prompt: String,
         system: String = "",
-        model: String = "") => (count: TokenCount)
+        model: String = "") => (count: TokenCount) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /**
      * Convenience workflow: count tokens then generate text in one go.
@@ -109,7 +109,7 @@ namespace anthropic.messages {
         system: String = "",
         model: String = "",
         max_tokens: Long = 1024,
-        cache_system: Boolean = false) => (result: ToolUseResult)
+        cache_system: Boolean = false) => (result: ToolUseResult) with Effect(kind = "external") with Cost(tier = "moderate")
 
     /** Result of a vision call (one or more images plus a prompt). */
     schema VisionResult {
@@ -137,7 +137,7 @@ namespace anthropic.messages {
         system: String = "",
         model: String = "",
         max_tokens: Long = 1024,
-        cache_system: Boolean = false) => (result: VisionResult)
+        cache_system: Boolean = false) => (result: VisionResult) with Effect(kind = "external") with Cost(tier = "moderate")
 
     /**
      * Result of a streaming Messages call. Same shape as MessageResult
@@ -168,7 +168,7 @@ namespace anthropic.messages {
         system: String = "",
         model: String = "",
         max_tokens: Long = 1024,
-        cache_system: Boolean = false) => (result: StreamResult)
+        cache_system: Boolean = false) => (result: StreamResult) with Effect(kind = "external") with Cost(tier = "moderate")
 
     /** Result of a Messages call that references uploaded Files-API files. */
     schema FileMessageResult {
@@ -199,5 +199,5 @@ namespace anthropic.messages {
         system: String = "",
         model: String = "",
         max_tokens: Long = 1024,
-        cache_system: Boolean = false) => (result: FileMessageResult)
+        cache_system: Boolean = false) => (result: FileMessageResult) with Effect(kind = "external") with Cost(tier = "moderate")
 }

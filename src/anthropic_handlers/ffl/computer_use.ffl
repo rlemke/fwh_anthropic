@@ -55,5 +55,5 @@ namespace anthropic.computer {
         display_height_px: Long = 768,
         display_number: Long = 1,
         enable_bash: Boolean = true,
-        enable_text_editor: Boolean = true) => (result: ComputerUseResult)
+        enable_text_editor: Boolean = true) => (result: ComputerUseResult) with Effect(kind = "external") with Cost(tier = "expensive")
 }

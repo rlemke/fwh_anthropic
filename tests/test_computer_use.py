@@ -306,7 +306,7 @@ class TestComputerUseHandler:
         import anthropic_handlers
 
         runner = MagicMock()
-        anthropic_handlers.example.register_handlers(runner)
+        anthropic_handlers.domain.register_handlers(runner)
         registered = {
             call.kwargs["facet_name"] for call in runner.register_handler.call_args_list
         }

@@ -38,11 +38,11 @@ namespace anthropic.batch {
      * MessageBatchRequest type (each has `custom_id` + `params`).
      */
     event facet SubmitBatch(
-        requests_json: String) => (result: BatchMetadata)
+        requests_json: String) => (result: BatchMetadata) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /** Check current status of a batch. Does NOT block on completion. */
     event facet GetBatchStatus(
-        batch_id: String) => (result: BatchMetadata)
+        batch_id: String) => (result: BatchMetadata) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /**
      * Pull results for an ended batch. `results_json` decodes to a
@@ -51,7 +51,7 @@ namespace anthropic.batch {
      * failure).
      */
     event facet GetBatchResults(
-        batch_id: String) => (result: BatchResults)
+        batch_id: String) => (result: BatchResults) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /**
      * Convenience: submit a batch, poll until ended, and pull results
@@ -73,5 +73,5 @@ namespace anthropic.batch {
     event facet RunBatch(
         requests_json: String,
         poll_interval_seconds: Double = 10.0,
-        timeout_seconds: Double = 600.0) => (result: RunBatchResult)
+        timeout_seconds: Double = 600.0) => (result: RunBatchResult) with Effect(kind = "external") with Cost(tier = "expensive")
 }

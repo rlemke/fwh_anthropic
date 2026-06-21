@@ -41,13 +41,13 @@ namespace anthropic.files {
      */
     event facet UploadFile(
         path: String,
-        mime_type: String = "") => (result: FileMetadata)
+        mime_type: String = "") => (result: FileMetadata) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /** List uploaded files (most-recent-first). */
     event facet ListFiles(
-        limit: Long = 50) => (result: FileListing)
+        limit: Long = 50) => (result: FileListing) with Effect(kind = "external") with Cost(tier = "cheap")
 
     /** Delete a previously-uploaded file by ID. */
     event facet DeleteFile(
-        file_id: String) => (result: FileDeletion)
+        file_id: String) => (result: FileDeletion) with Effect(kind = "external") with Cost(tier = "cheap")
 }
