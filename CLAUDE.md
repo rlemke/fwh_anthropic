@@ -192,5 +192,5 @@ When wiring a new Anthropic surface:
 - Note rate limits, cost shape, idempotency, and resumability. These
   drive which Facetwork mixins the FFL surface should bake in.
 - For long-running surfaces (Batch, Computer Use), set
-  `AFL_TASK_EXECUTION_TIMEOUT_MS` appropriately in the package's
+  `FW_TASK_EXECUTION_TIMEOUT_MS` appropriately in the package's
   `runner_env` (see `osm-geocoder` for the precedent).
