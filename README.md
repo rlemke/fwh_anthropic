@@ -19,6 +19,22 @@ All six initial areas are wired (16 facets total). Adding a new area
 `handlers/<area>/` + `tools/_lib/<area>.py` + `ffl/<area>.ffl` and
 wire it into `handlers/__init__.py`.
 
+## Feature specifications
+
+Every integration area has a spec in [**`docs/`**](docs/README.md) — how the call flows
+(FFL → handler → `tools/_lib` → shared SDK client), whether/how it **fans out**, the schema
+**fields & JSON-bridge conventions** it uses, the **libraries/binaries** it needs, its
+**facets & workflows** (with `Effect`/`Cost` mixins), and its **cache/output**. Start with the
+cross-cutting [**architecture**](docs/architecture.md) spec (shared client, the
+`tools/_lib ↔ handlers ↔ ffl` pattern, JSON-bridge fields) and the flagship
+[**Messages API**](docs/messages.md); the full index is in [`docs/README.md`](docs/README.md).
+
+| Group | Specs |
+|-------|-------|
+| **Cross-cutting** | [architecture](docs/architecture.md) |
+| **Integration areas** | [messages](docs/messages.md) · [batch](docs/batch.md) · [files](docs/files.md) · [agent-sdk](docs/agent-sdk.md) · [claude-code](docs/claude-code.md) · [computer-use](docs/computer-use.md) |
+| **Composition** | [composition](docs/composition.md) |
+
 Discovered by the Facetwork runner via the `facetwork.examples` entry point
 declared in `pyproject.toml`. After `pip install -e .`, Facetwork's
 `scripts/start-runner --example anthropic` and `scripts/seed-examples`
