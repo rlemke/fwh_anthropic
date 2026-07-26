@@ -26,7 +26,7 @@ def main() -> int:
         help=f"Override the default model (current default: {DEFAULT_MODEL})",
     )
     p.add_argument("--max-tokens", type=int, default=1024, dest="max_tokens")
-    p.add_argument("--temperature", type=float, default=1.0)
+    p.add_argument("--temperature", type=float, default=None)
     p.add_argument(
         "--cache-system",
         action="store_true",

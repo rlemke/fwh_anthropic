@@ -86,7 +86,7 @@ def create_message(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     cache_system: bool = False,
 ) -> dict[str, Any]:
     """Single-turn Messages call.
@@ -112,8 +112,9 @@ def create_message(
         "model": model_id,
         "max_tokens": int(max_tokens),
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": float(temperature),
     }
+    if temperature is not None:
+        kwargs["temperature"] = float(temperature)
     if system:
         kwargs["system"] = _system_param(system, cache=cache_system)
 
@@ -202,7 +203,7 @@ def create_message_with_tools(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     cache_system: bool = False,
 ) -> dict[str, Any]:
     """Single round of a tool-use conversation.
@@ -234,8 +235,9 @@ def create_message_with_tools(
         "max_tokens": int(max_tokens),
         "messages": messages,
         "tools": tools,
-        "temperature": float(temperature),
     }
+    if temperature is not None:
+        kwargs["temperature"] = float(temperature)
     if system:
         kwargs["system"] = _system_param(system, cache=cache_system)
 
@@ -263,7 +265,7 @@ def run_tool_use_loop(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     max_iterations: int = 8,
 ) -> dict[str, Any]:
     """Run the full Claude tool-use loop until completion or iteration cap.
@@ -395,7 +397,7 @@ def create_message_with_images(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     cache_system: bool = False,
 ) -> dict[str, Any]:
     """Single-turn vision call: text prompt + one or more images.
@@ -430,8 +432,9 @@ def create_message_with_images(
         "model": model_id,
         "max_tokens": int(max_tokens),
         "messages": [{"role": "user", "content": content}],
-        "temperature": float(temperature),
     }
+    if temperature is not None:
+        kwargs["temperature"] = float(temperature)
     if system:
         kwargs["system"] = _system_param(system, cache=cache_system)
 
@@ -459,7 +462,7 @@ def stream_message(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     cache_system: bool = False,
     on_chunk: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
@@ -486,8 +489,9 @@ def stream_message(
         "model": model_id,
         "max_tokens": int(max_tokens),
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": float(temperature),
     }
+    if temperature is not None:
+        kwargs["temperature"] = float(temperature)
     if system:
         kwargs["system"] = _system_param(system, cache=cache_system)
 
@@ -543,7 +547,7 @@ def create_message_with_file(
     system: str = "",
     model: str | None = None,
     max_tokens: int = 1024,
-    temperature: float = 1.0,
+    temperature: float | None = None,
     cache_system: bool = False,
 ) -> dict[str, Any]:
     """Messages call where the user content references uploaded Files-API files.
@@ -582,8 +586,9 @@ def create_message_with_file(
         "model": model_id,
         "max_tokens": int(max_tokens),
         "messages": [{"role": "user", "content": content}],
-        "temperature": float(temperature),
     }
+    if temperature is not None:
+        kwargs["temperature"] = float(temperature)
     if system:
         kwargs["system"] = _system_param(system, cache=cache_system)
 

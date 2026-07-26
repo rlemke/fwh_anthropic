@@ -36,7 +36,7 @@ def _create_message_handler(payload: dict) -> dict[str, Any]:
     system = payload.get("system", "")
     model = payload.get("model") or None
     max_tokens = int(payload.get("max_tokens", 1024))
-    temperature = float(payload.get("temperature", 1.0))
+    temperature = payload.get("temperature")
     cache_system = bool(payload.get("cache_system", False))
 
     step_log = payload.get("_step_log")
@@ -99,7 +99,7 @@ def _create_message_with_tools_handler(payload: dict) -> dict[str, Any]:
     system = payload.get("system", "")
     model = payload.get("model") or None
     max_tokens = int(payload.get("max_tokens", 1024))
-    temperature = float(payload.get("temperature", 1.0))
+    temperature = payload.get("temperature")
     cache_system = bool(payload.get("cache_system", False))
 
     step_log = payload.get("_step_log")
@@ -146,7 +146,7 @@ def _create_message_with_images_handler(payload: dict) -> dict[str, Any]:
     system = payload.get("system", "")
     model = payload.get("model") or None
     max_tokens = int(payload.get("max_tokens", 1024))
-    temperature = float(payload.get("temperature", 1.0))
+    temperature = payload.get("temperature")
     cache_system = bool(payload.get("cache_system", False))
 
     step_log = payload.get("_step_log")
@@ -175,7 +175,7 @@ def _create_message_stream_handler(payload: dict) -> dict[str, Any]:
     system = payload.get("system", "")
     model = payload.get("model") or None
     max_tokens = int(payload.get("max_tokens", 1024))
-    temperature = float(payload.get("temperature", 1.0))
+    temperature = payload.get("temperature")
     cache_system = bool(payload.get("cache_system", False))
 
     step_log = payload.get("_step_log")
@@ -215,7 +215,7 @@ def _create_message_with_file_handler(payload: dict) -> dict[str, Any]:
     system = payload.get("system", "")
     model = payload.get("model") or None
     max_tokens = int(payload.get("max_tokens", 1024))
-    temperature = float(payload.get("temperature", 1.0))
+    temperature = payload.get("temperature")
     cache_system = bool(payload.get("cache_system", False))
 
     step_log = payload.get("_step_log")

@@ -15,7 +15,7 @@ point declared in ``pyproject.toml``::
     anthropic = "anthropic_handlers:domain"
 
 Once ``pip install -e .`` has been run from this repository, Facetwork's
-``scripts/start-runner --example anthropic`` and ``scripts/seed-examples``
+``fw runner start --domain anthropic`` and ``fw ffl seed``
 will pick this package up automatically.
 
 At this initial scaffolding stage the package registers **zero**

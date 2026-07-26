@@ -6,7 +6,7 @@ hosts FFL workflows + handlers for every public Anthropic surface
 Use, MCP, …). The Facetwork platform (workflow compiler + runtime)
 lives at `/Users/ralph_lemke/facetwork`; this repo only contains the
 Anthropic-specific FFL, handlers, and CLI tools. The two are wired
-together via the `facetwork.examples` entry point in `pyproject.toml`.
+together via the `facetwork.domains` entry point in `pyproject.toml`.
 
 ## Multi-area design
 
@@ -35,8 +35,8 @@ and `handlers/<area>/`.
 
 ```
 fwh_anthropic/
-├── pyproject.toml                       # declares the facetwork.examples entry point
-├── src/anthropic_handlers/__init__.py   # exports `example: ExamplePackage`
+├── pyproject.toml                       # declares the facetwork.domains entry point
+├── src/anthropic_handlers/__init__.py   # exports `domain: DomainPackage`
 ├── src/anthropic_handlers/handlers/     # 6+ area subpackages + shared/ shim
 ├── src/anthropic_handlers/ffl/          # one .ffl per area + top-level catalog
 ├── src/anthropic_handlers/tools/        # CLI utilities + _lib/ (per-area + shared client)
@@ -53,8 +53,8 @@ pip install -e .
 pip install -e ".[agent_sdk,mcp]"
 
 # From a Facetwork checkout:
-scripts/seed-examples --include anthropic
-scripts/start-runner --example anthropic -- --log-format text
+fw ffl seed --include anthropic
+fw runner start --domain anthropic -- --log-format text
 
 # Inspect wiring status
 src/anthropic_handlers/tools/list-areas.sh

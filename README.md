@@ -35,9 +35,9 @@ cross-cutting [**architecture**](docs/architecture.md) spec (shared client, the
 | **Integration areas** | [messages](docs/messages.md) · [batch](docs/batch.md) · [files](docs/files.md) · [agent-sdk](docs/agent-sdk.md) · [claude-code](docs/claude-code.md) · [computer-use](docs/computer-use.md) |
 | **Composition** | [composition](docs/composition.md) |
 
-Discovered by the Facetwork runner via the `facetwork.examples` entry point
+Discovered by the Facetwork runner via the `facetwork.domains` entry point
 declared in `pyproject.toml`. After `pip install -e .`, Facetwork's
-`scripts/start-runner --example anthropic` and `scripts/seed-examples`
+`fw runner start --domain anthropic` and `fw ffl seed`
 pick this package up automatically (even with zero handlers wired today).
 
 ## Install
@@ -48,14 +48,14 @@ cd ~/fw_handlers/fwh_anthropic
 pip install -e .
 ```
 
-This registers the package under the `facetwork.examples` entry-point group,
+This registers the package under the `facetwork.domains` entry-point group,
 making it discoverable by any Facetwork installation in the same environment.
 
 ## Run from a Facetwork checkout
 
 ```bash
-scripts/seed-examples --include anthropic
-scripts/start-runner --example anthropic -- --log-format text
+fw ffl seed --include anthropic
+fw runner start --domain anthropic -- --log-format text
 ```
 
 The runner reports `anthropic: 16 handlers registered  [entry_point]`.
@@ -85,7 +85,7 @@ See `tests/live/README.md` for the full gating contract.
 
 ```
 fwh_anthropic/
-├── pyproject.toml                            # facetwork.examples entry point
+├── pyproject.toml                            # facetwork.domains entry point
 ├── README.md
 ├── CLAUDE.md                                 # guidance for Claude Code in this repo
 ├── agent-spec/
@@ -94,7 +94,7 @@ fwh_anthropic/
 │   └── integration-areas.agent-spec.yaml     # how to add a new Anthropic-surface area
 ├── tests/
 └── src/anthropic_handlers/
-    ├── __init__.py                           # exports `example: ExamplePackage`
+    ├── __init__.py                           # exports `domain: DomainPackage`
     ├── handlers/
     │   ├── __init__.py                       # register_all_registry_handlers (calls every area)
     │   ├── shared/anthropic_utils.py         # shim into tools/_lib (auth, retry, rate-limit, …)

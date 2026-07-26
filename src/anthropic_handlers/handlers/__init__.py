@@ -1,7 +1,7 @@
 """Aggregator for every Anthropic integration-area handler.
 
 Each area subpackage exposes ``register_handlers(runner)``; this module
-calls all of them so a single ``--example anthropic`` registers every
+calls all of them so a single ``--domain anthropic`` registers every
 wired-up facet across every area. Areas that aren't yet implemented
 register zero facets — which is correct behaviour during scaffolding.
 """
