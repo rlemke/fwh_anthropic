@@ -19,6 +19,48 @@ All six initial areas are wired (16 facets total). Adding a new area
 `handlers/<area>/` + `tools/_lib/<area>.py` + `ffl/<area>.ffl` and
 wire it into `handlers/__init__.py`.
 
+## FFL at a glance
+
+Every Anthropic surface is a typed facet, so an LLM call is just another step in a
+[FFL](https://github.com/rlemke/facetwork/blob/main/docs/reference/language/grammar.md)
+workflow — retried, timed out, fanned out and traced like any other. A step is
+`name = Facet(args)`; schema results nest (`msg.result.text`):
+
+```ffl
+namespace my.llm {
+
+    use anthropic.files
+    use anthropic.messages
+
+    /** Upload a file, then ask a question against it. */
+    workflow AskAboutFile(path: String, question: String) => (file_id: String, text: String) andThen {
+
+        up = anthropic.files.UploadFile(path = $.path)
+
+        msg = anthropic.messages.CreateMessageWithFile(
+            prompt = $.question,
+            file_ids = up.result.id,
+            file_type = "document",
+            max_tokens = 1024)
+
+        yield AskAboutFile(file_id = up.result.id, text = msg.result.text)
+    }
+}
+```
+
+```bash
+fw ffl run --primary my.ffl \
+  --library src/anthropic_handlers/ffl/messages.ffl \
+  --library src/anthropic_handlers/ffl/files.ffl \
+  --workflow my.llm.AskAboutFile \
+  --inputs '{"path": "/data/report.pdf", "question": "Headline finding?"}'
+```
+
+📖 **[docs/ffl-examples.md](docs/ffl-examples.md)** — the full example gallery:
+token-budget gating with `when`, `foreach` over many prompts, prompt caching, the
+Batch API, agent/Claude-Code sessions as steps, and call-time
+`Timeout`/`Retry`/`catch`. Every snippet there is compile-checked.
+
 ## Feature specifications
 
 Every integration area has a spec in [**`docs/`**](docs/README.md) — how the call flows

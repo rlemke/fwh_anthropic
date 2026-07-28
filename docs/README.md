@@ -37,6 +37,7 @@ facets) that every other messaging surface builds on.
 | Spec | Namespace | What it covers |
 |------|-----------|----------------|
 | [composition.md](composition.md) | `anthropic.compose` | Cross-area workflows — `DocumentQA` (Files + Messages RAG); no new event facets, glue only. |
+| [ffl-examples.md](ffl-examples.md) | **Usage patterns.** A gallery of complete, compile-checked FFL examples over these facets — minimal ask, token-budget `when` gate, `foreach` over prompts, prompt caching, batch, agent→code chaining, mixins + `catch`. |
 
 ---
 
