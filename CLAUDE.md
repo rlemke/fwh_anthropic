@@ -4,7 +4,7 @@ This repository is a **standalone Facetwork example package** that
 hosts FFL workflows + handlers for every public Anthropic surface
 (Messages API, Batch API, Files API, Agent SDK, Claude Code, Computer
 Use, MCP, …). The Facetwork platform (workflow compiler + runtime)
-lives at `/Users/ralph_lemke/facetwork`; this repo only contains the
+lives at [github.com/rlemke/facetwork](https://github.com/rlemke/facetwork); this repo only contains the
 Anthropic-specific FFL, handlers, and CLI tools. The two are wired
 together via the `facetwork.domains` entry point in `pyproject.toml`.
 
